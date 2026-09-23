@@ -1,5 +1,7 @@
 # Twocast 私测版部署到 Vercel
 
+当前生产地址：<https://twocast-private-beta.vercel.app>。本地仓库的 `origin` 是 <https://github.com/panxt/Twocast>，`upstream` 保留原项目地址；私测开发分支为 `codex/vercel-private-beta`，fork 的 `main` 用作生产分支。
+
 此分支把生成任务交给 Vercel Workflow。Next.js 页面与 API 部署到 Vercel；Postgres 和私有音频桶使用独立 Supabase 项目。生产环境不需要 Redis、Docker、textract API 或 ffmpeg API：文件上传暂未开放，音频合成使用随应用打包的 `ffmpeg-static`。目前生产生成仅支持 MiniMax TTS；主题、链接和长文本输入可用。搜索型主题仍需配置 LLM 搜索接口。
 
 ## 已创建的资源
@@ -39,3 +41,5 @@
 生产环境改过 `NEXT_PUBLIC_SITE_URL`、`NEXT_PUBLIC_VERCEL_BETA` 等 `NEXT_PUBLIC_` 变量后必须重新构建。工作流回调路径 `/.well-known/workflow/` 由 Workflow 自行认证，不使用浏览器邀请码会话。
 
 本地原有 `yarn start` 与 Docker 服务可继续用于开发；本分支的生产功能走 Vercel Workflow，不启动 BullMQ worker。
+
+当前 Vercel 项目通过 CLI 关联，手动发布命令为 `vercel deploy --prod`（需先登录并在仓库目录运行）。GitHub 连接后，推送 fork 的 `main` 分支会触发生产部署；其他分支产生预览部署。
