@@ -70,7 +70,12 @@ export async function finalizeMp3(parts: Buffer[], script: ScriptItem[]) {
   try {
     const input = path.join(dir, 'joined.mp3')
     const output = path.join(dir, 'normalized.mp3')
-    const binary = process.env.FFMPEG_PATH || ffmpegPath
+    // Webpack bundles ffmpeg-static's JavaScript into .next/server/chunks, so
+    // its __dirname-based export points at a nonexistent chunks/ffmpeg there.
+    // Next's file tracer places the included executable under node_modules.
+    const binary = process.env.FFMPEG_PATH || (process.env.VERCEL === '1'
+      ? path.join(process.cwd(), 'node_modules/ffmpeg-static/ffmpeg')
+      : ffmpegPath)
     if (!binary) throw new Error('FFmpeg binary is unavailable')
     const segmentDurations: number[] = []
     for (let index = 0; index < parts.length; index++) {
