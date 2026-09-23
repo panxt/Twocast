@@ -9,10 +9,11 @@ import { createTranslation } from "@/i18n/server";
 import { LocaleTypes } from "@/i18n/settings";
 
 type HomeProps = {
-  params: { locale: LocaleTypes }
+  params: Promise<{ locale: LocaleTypes }>
 }
 
-export default async function Page({ params: { locale } }: HomeProps) {
+export default async function Page({ params }: HomeProps) {
+  const { locale } = await params
   const { t } = await createTranslation(locale, "home");
   return (
     <>

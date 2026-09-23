@@ -4,16 +4,20 @@ import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { ScriptItem } from '@/lib/podcast/types';
 import { useTranslation } from 'react-i18next';
+import { useAudioPlayer } from '@/contexts/AudioPlayerContext';
 
 interface PodcastTabsProps {
   outline: string;
   keyPoints: string;
   scripts: ScriptItem[];
+  timedScript?: { role: string; text: string; startMs: number }[];
 }
 
-export default function PodcastTabs({ outline, keyPoints, scripts }: PodcastTabsProps) {
+export default function PodcastTabs({ outline, keyPoints, scripts, timedScript }: PodcastTabsProps) {
   const [activeTab, setActiveTab] = useState<'outline' | 'keyPoints' | 'scripts'>('outline');
   const {t} = useTranslation('podcast');
+  const { currentTime, seek, currentTrack } = useAudioPlayer();
+  const activeLine = timedScript?.findLastIndex(line => line.startMs <= currentTime * 1000) ?? -1;
 
   const tabs = [
     { id: 'outline', label: t('outline'), labelMobile: t('outline') },
@@ -75,7 +79,7 @@ export default function PodcastTabs({ outline, keyPoints, scripts }: PodcastTabs
             {scripts.map((script, index) => (
               <div
                 key={index}
-                className="relative py-2 sm:py-3"
+                className={`relative py-2 sm:py-3 rounded-xl ${currentTrack && activeLine === index ? 'bg-indigo-100 dark:bg-indigo-900/40' : ''}`}
               >
                 {/* 角色标签和内容在同一行 */}
                 <div className="flex gap-3 items-start">
@@ -96,6 +100,10 @@ export default function PodcastTabs({ outline, keyPoints, scripts }: PodcastTabs
                     <p className="text-gray-700 dark:text-gray-300 leading-relaxed text-base sm:text-lg">
                       {script.text}
                     </p>
+                    {timedScript?.[index] && <button type="button" onClick={() => seek(timedScript[index].startMs / 1000)}
+                      className="mt-1 text-xs text-indigo-600 dark:text-indigo-300" aria-label={`跳转到第 ${index + 1} 段`}>
+                      {Math.floor(timedScript[index].startMs / 60000)}:{String(Math.floor(timedScript[index].startMs / 1000) % 60).padStart(2, '0')}
+                    </button>}
                   </div>
                 </div>
               </div>
@@ -105,4 +113,4 @@ export default function PodcastTabs({ outline, keyPoints, scripts }: PodcastTabs
       </div>
     </div>
   );
-} 
+}

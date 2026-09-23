@@ -1,15 +1,38 @@
 
 
+import { cookies } from 'next/headers'
+import { and, eq, gt } from 'drizzle-orm'
+import { createHash } from 'crypto'
+import { getDb } from '@/db/db'
+import { sessionsTable } from '@/db/schema'
+
+export const SESSION_COOKIE = 'twocast_session'
+
+export function sha256(value: string): string {
+  return createHash('sha256').update(value).digest('hex')
+}
+
 export async function getCurrentUser() {
-  let userId = 0;
-  let userEmail = 'example@example.com';
-  let user;
-  if (process.env.NEXT_PUBLIC_CLERK_ENABLED) {
+  // Local development remains usable without an invite database.
+  if (process.env.NODE_ENV !== 'production' && process.env.INVITE_REQUIRED !== '1') {
+    return { userId: 0, userEmail: 'local@twocast.invalid', isAdmin: true }
   }
+
+  const token = (await cookies()).get(SESSION_COOKIE)?.value
+  if (!token || !/^[a-f0-9]{64}$/.test(token)) {
+    return { userId: 0, userEmail: '', isAdmin: false }
+  }
+
+  const sessions = await getDb().select().from(sessionsTable).where(and(
+    eq(sessionsTable.tokenHash, sha256(token)),
+    gt(sessionsTable.expiresAt, new Date()),
+  )).limit(1)
+  const session = sessions[0]
+  if (!session) return { userId: 0, userEmail: '', isAdmin: false }
+  const isAdmin = session.role === 'admin'
   return {
-    userId,
-    userEmail,
-    user,
-    isAdmin: true,
+    userId: session.id,
+    userEmail: isAdmin ? 'admin@twocast.invalid' : `invite-${session.id}@twocast.invalid`,
+    isAdmin,
   }
 }

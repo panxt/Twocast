@@ -1,27 +1,19 @@
 import "@/css/tailwind.css";
 import "pliny/search/algolia.css";
 
-import { Space_Grotesk } from "next/font/google";
 import siteMetadata from "@/data/siteMetadata";
 import { Metadata } from "next";
 import { dir } from "i18next";
 import { locales, LocaleTypes } from "@/i18n/settings";
 import { createTranslation } from "@/i18n/server";
-import { ClerkProvider } from "@clerk/nextjs";
-import { AppContextProvider } from "@/contexts/AppContext";
 import Body from "../../templates/humanizeai-pro/Body";
 
 export async function generateStaticParams() {
   return locales.map((locale) => ({ locale }));
 }
 
-const space_grotesk = Space_Grotesk({
-  subsets: ["latin"],
-  display: "swap",
-  variable: "--font-space-grotesk"
-});
-
-export async function generateMetadata({ params: { locale } }): Promise<Metadata> {
+export async function generateMetadata({ params }: { params: Promise<{ locale: LocaleTypes }> }): Promise<Metadata> {
+  const { locale } = await params
   const { t } = await createTranslation(locale, "home");
   return {
     metadataBase: new URL(siteMetadata.siteUrl),
@@ -67,24 +59,18 @@ export async function generateMetadata({ params: { locale } }): Promise<Metadata
   };
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
-  params: { locale }
+  params
 }: {
   children: React.ReactNode
-  params: { locale: LocaleTypes }
+  params: Promise<{ locale: LocaleTypes }>
 }) {
-  let body = <Body locale={locale}>{children}</Body>
-  if (process.env.NEXT_PUBLIC_CLERK_ENABLED) {
-    body = (
-      <AppContextProvider>
-        {body}
-      </AppContextProvider>
-    );
-  }
+  const { locale } = await params
+  const body = <Body locale={locale}>{children}</Body>
 
   const html = (
-    <html lang={locale} dir={dir(locale)} className={`${space_grotesk.variable} scroll-smooth`} suppressHydrationWarning>
+    <html lang={locale} dir={dir(locale)} className="scroll-smooth" suppressHydrationWarning>
     <meta name="msapplication-TileColor" content="#000000" />
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#fff" />
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#000" />
@@ -103,12 +89,5 @@ export default function RootLayout({
     </html>
   );
 
-  if (process.env.NEXT_PUBLIC_CLERK_ENABLED) {
-    return (
-      <ClerkProvider afterSignOutUrl={`/sign-out`} signInUrl={`/sign-in`} signUpUrl={`/sign-up`} afterSignInUrl={`/`}>
-        {html}
-      </ClerkProvider>
-    );
-  }
   return html;
 }

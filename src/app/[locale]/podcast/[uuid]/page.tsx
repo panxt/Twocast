@@ -5,19 +5,24 @@ import { LongTextResult } from '@/queue/types';
 import { notFound } from 'next/navigation';
 import PodcastPlayer from './components/PodcastPlayer';
 import PodcastTabs from './components/PodcastTabs';
+import { getCurrentUser } from '@/utils/user';
+import { getAudioUrl } from '@/lib/podcast/storage';
 
 interface PodcastPageProps {
-  params: {
+  params: Promise<{
     uuid: string;
     locale: string;
-  };
+  }>;
 }
 
 export default async function PodcastPage({ params }: PodcastPageProps) {
+  const { uuid } = await params
+  const user = await getCurrentUser();
+  if (!user.userEmail) notFound();
   // 使用 server action 查询 uuid 获取 task
-  const task = await getTaskByUuid(params.uuid);
+  const task = await getTaskByUuid(uuid);
   
-  if (!task) {
+  if (!task || (!user.isAdmin && task.userEmail !== user.userEmail)) {
     notFound();
   }
 
@@ -30,6 +35,7 @@ export default async function PodcastPage({ params }: PodcastPageProps) {
 
   const audioData = audioItem.input as LongTextResult;
   const audioOutput = audioItem.output as AudioOutput;
+  const audioUrl = await getAudioUrl(audioOutput?.location);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50/50 via-white to-purple-50/30 dark:from-gray-900 dark:via-gray-800 dark:to-purple-900/20">
@@ -49,7 +55,7 @@ export default async function PodcastPage({ params }: PodcastPageProps) {
 
         {/* 播放器区域 */}
         <div className="max-w-4xl mx-auto mb-8 sm:mb-12">
-          <PodcastPlayer audioUrl={audioOutput?.location} title={audioData.title} duration={audioOutput?.duration} />
+          <PodcastPlayer audioUrl={audioUrl} title={audioData.title} duration={audioOutput?.duration} />
         </div>
 
         {/* 内容标签页 */}
@@ -58,6 +64,7 @@ export default async function PodcastPage({ params }: PodcastPageProps) {
             outline={audioData.outline}
             keyPoints={audioData.key_points}
             scripts={audioData.script}
+            timedScript={audioOutput?.timedScript}
           />
         </div>
       </div>

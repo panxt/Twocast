@@ -6,7 +6,7 @@ import { tasksTable } from "@/db/schema";
 import { Task } from "@/db/types";
 import { taskGetStepItem, taskUpdateStepItem } from "@/lib/podcast/task";
 import { queryWrap } from "@/utils/db-util";
-import { queryChat } from "@/utils/xai";
+import { queryChat, parseLLMJson } from "@/utils/xai";
 // import Queue, { Job } from "bee-queue";
 import { getTaskLogKey } from "@/utils/task";
 import { Queue } from 'bullmq';
@@ -44,7 +44,7 @@ export function setupLongTextQueue() {
   })
 }
 
-export async function processLongTextTask(task: Task) {
+export async function processLongTextTask(task: Task, enqueueNext = true) {
   const stepItem = taskGetStepItem(task, PodcastStep.LongText)
   const userInputs = task.userInputs as TaskUserInput
   const input = stepItem.input!.slice(0, 100_000)
@@ -101,7 +101,7 @@ export async function processLongTextTask(task: Task) {
         }
     ]
 }`
-    result = JSON.parse(text) as LongTextResult
+    result = parseLLMJson<LongTextResult>(text)
   } else {
     // 并行生成大纲和脚本以提高性能
     const [outlineResult, scriptResult] = await Promise.all([
@@ -148,7 +148,7 @@ export async function processLongTextTask(task: Task) {
   }).where(eq(tasksTable.id, task.id)))
 
   // 传给下个队列
-  getAudioQueue().add('audio', { task: task })
+  if (enqueueNext) await getAudioQueue().add('audio', { task: task })
 }
 
 export interface GenOutlineResult {
@@ -157,7 +157,7 @@ export interface GenOutlineResult {
 }
 
 export async function genOutline(text: string, userInputs: TaskUserInput): Promise<GenOutlineResult> {
-  let prompt = fs.readFileSync(path.join(__dirname, '../../resources/prompts/gen_outline.md'), 'utf-8')
+  let prompt = fs.readFileSync(path.join(process.cwd(), 'resources/prompts/gen_outline.md'), 'utf-8')
   if (userInputs.language && userInputs.language != 'auto') {
     prompt = prompt.replace('输出语言为: 原资料语言', `输出语言为: ${userInputs.language}`)
   }
@@ -166,12 +166,12 @@ export async function genOutline(text: string, userInputs: TaskUserInput): Promi
   const data = resp.data as ChatCompletion
   // print token usage
   console.log(`[${currentStep}:genOutline] token usage=${JSON.stringify(data.usage)}`)
-  const result = JSON.parse(data.choices[0].message.content!) as GenOutlineResult
+  const result = parseLLMJson<GenOutlineResult>(data.choices[0].message.content!)
   return result
 }
 
 export async function genScript(text: string, userInputs: TaskUserInput): Promise<ScriptItem[]> {
-  let prompt = fs.readFileSync(path.join(__dirname, '../../resources/prompts/gen_script.md'), 'utf-8')
+  let prompt = fs.readFileSync(path.join(process.cwd(), 'resources/prompts/gen_script.md'), 'utf-8')
   if (userInputs.language && userInputs.language != 'auto') {
     prompt = prompt.replace('输出语言为: 原资料语言', `输出语言为: ${userInputs.language}`)
   }
@@ -182,8 +182,8 @@ export async function genScript(text: string, userInputs: TaskUserInput): Promis
   }
   const resp = await queryChat(text + '\n\n' + prompt, { json: true })
   const data = resp.data as ChatCompletion
-  const json = JSON.parse(data.choices[0].message.content!)
-  const items = json.script as ScriptItem[]
+  const json = parseLLMJson<{ script: ScriptItem[] }>(data.choices[0].message.content!)
+  const items = json.script
   for (const item of items) {
     // 兼容 gpt-4o-mini 的 bug
     if (!item.text) {

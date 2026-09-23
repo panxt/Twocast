@@ -2,18 +2,21 @@ import { getAxiosInstance } from "@/utils/http";
 import { getCache, setCache } from "@/utils/redis";
 import { respSuccess } from "@/utils/resp";
 import { NextRequest } from "next/server";
+import { getSetting } from '@/lib/settings';
+import { getCurrentUser } from '@/utils/user';
 
 export async function GET(req: NextRequest) {
+    if (!(await getCurrentUser()).userEmail) return new Response('Unauthorized', { status: 401 })
     const languages = req.nextUrl.searchParams.get('languages')?.split(',') || []
     const ret = {
     }
-    if (process.env.MINIMAX_ENABLED) {
+    if (process.env.MINIMAX_ENABLED === '1') {
         ret['minimaxi'] = await getMinimaxVoices()
     }
-    if (process.env.GEMINI_ENABLED) {
+    if (process.env.GEMINI_ENABLED === '1') {
         ret['gemini'] = geminiVoices
     }
-    if (process.env.FISH_AUDIO_ENABLED) {
+    if (process.env.FISH_AUDIO_ENABLED === '1') {
         ret['fish_audio'] = await getFishAudioVoices(languages)
     }
     return respSuccess(ret)
@@ -64,17 +67,18 @@ async function getFishAudioVoices(languages: string[] = [], page_size: number = 
 }
 
 async function getMinimaxVoices() {
-    const cacheKey = 'minimaxi_voices'
-    const cache = await getCache(cacheKey)
-    if (cache) {
-        return cache
-    }
+    const token = await getSetting('MINIMAX_TOKEN')
+    if (!token) return []
 
-    const url = 'https://api.minimax.chat/v1/get_voice'
+    // China-only override: original code used api.minimax.chat (overseas), but the
+    // user's network transparently proxies overseas domains to localhost, causing
+    // "400 The plain HTTP request was sent to HTTPS port". The China endpoint
+    // api.minimaxi.com is reachable and accepts the same Bearer token.
+    const url = 'https://api.minimaxi.com/v1/get_voice'
     const headers = {
-        'authority': 'api.minimax.chat',
+        'authority': 'api.minimaxi.com',
         'content-type': 'application/json',
-        'Authorization': `Bearer ${process.env.MINIMAX_TOKEN}`
+        'Authorization': `Bearer ${token}`
     }
     // console.log('process.env.MINIMAX_TOKEN', process.env.MINIMAX_TOKEN)
 
@@ -98,7 +102,6 @@ async function getMinimaxVoices() {
             description: '',
         }
     })
-    await setCache(cacheKey, ret, 60 * 60 * 24)
     return ret
 }
 

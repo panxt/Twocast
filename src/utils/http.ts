@@ -15,7 +15,11 @@ export function getAxiosInstance(options?: AxiosInstanceOptions) {
         throwError: false,
     }
     options = { ...defaultOptions, ...options }
-    const timeout = 60_000
+    // 60s was too tight for long-text/file jobs once Minimax M-series appends
+    // a <think> reasoning block: a 5K-char input can balloon to 30s+ of
+    // upstream thinking before the JSON arrives. 180s still has a hard
+    // ceiling so a stuck request can't hang the worker forever.
+    const timeout = 180_000
     let axiosOptions: AxiosRequestConfig = {
         // validateStatus 返回 true 时，promise 状态为 resolved，否则为 rejected
         validateStatus: function (status) {

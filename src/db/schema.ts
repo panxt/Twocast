@@ -1,4 +1,4 @@
-import { integer, pgTable, varchar, json, timestamp, numeric, serial, bigint, smallint, boolean } from "drizzle-orm/pg-core";
+import { integer, pgTable, varchar, json, timestamp, numeric, serial, bigint, smallint, boolean, text } from "drizzle-orm/pg-core";
 
 export const tasksTable = pgTable('tasks', {
   id: integer().primaryKey().generatedByDefaultAsIdentity(),
@@ -29,4 +29,29 @@ export const tasksTable = pgTable('tasks', {
   createdAt: timestamp('created_at', { withTimezone: true }),
   // 更新时间
   updatedAt: timestamp('updated_at', { withTimezone: true })
+});
+
+export const inviteCodesTable = pgTable('invite_codes', {
+  id: integer().primaryKey().generatedByDefaultAsIdentity(),
+  codeHash: varchar('code_hash', { length: 64 }).notNull().unique(),
+  label: varchar('label', { length: 120 }),
+  maxUses: integer('max_uses').notNull().default(1),
+  usedCount: integer('used_count').notNull().default(0),
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const sessionsTable = pgTable('invite_sessions', {
+  id: integer().primaryKey().generatedByDefaultAsIdentity(),
+  tokenHash: varchar('token_hash', { length: 64 }).notNull().unique(),
+  inviteCodeId: integer('invite_code_id'),
+  role: varchar('role', { length: 16 }).notNull().default('member'),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const appSettingsTable = pgTable('app_settings', {
+  key: varchar('key', { length: 80 }).primaryKey(),
+  encryptedValue: text('encrypted_value').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

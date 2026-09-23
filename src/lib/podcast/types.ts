@@ -1,12 +1,14 @@
 export type AudioOutput = {
   location: string;
   duration: number;
+  timedScript?: { role: string; text: string; startMs: number }[];
 }
 
 export interface AudioResult {
   audio: Buffer;
   format: string;
   duration?: number;
+  timedScript?: { role: string; text: string; startMs: number }[];
 }
 
 export enum PodcastInputType {

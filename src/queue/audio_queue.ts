@@ -15,7 +15,7 @@ import { eq } from "drizzle-orm";
 import { initQueue } from "./queue_base";
 import { getCache, getRedis } from "@/utils/redis";
 import { getPlatformConcurrencies } from "@/lib/podcast/client_utils";
-import fs from "fs";
+import { storeAudio } from '@/lib/podcast/storage';
 
 const QueueName = 'audio_queue'
 const currentStep = PodcastStep.Audio
@@ -90,19 +90,8 @@ export async function processAudioTask(task: Task) {
   if (process.env.MOCK_ENABLED) {
     location = `${process.env.NEXT_PUBLIC_SITE_URL}/assets/site/podcast.mp3`
   } else {
-    const s3Key = `${task.uuid}-${Date.now()}.${audioResult.format}`
-    const cached = await getCache(s3Key)
-    if (cached) {
-      location = cached as string
-    } else {
-      if (process.env.NEXT_PUBLIC_CLERK_ENABLED) {
-      } else {
-        const savePath = `assets/audio/${s3Key}`
-        fs.mkdirSync('public/assets/audio', { recursive: true })
-        fs.writeFileSync('public/' + savePath, new Uint8Array(audioResult.audio))
-        location = process.env.NEXT_PUBLIC_SITE_URL! + '/' + savePath
-      }
-    }
+    const audioKey = `${task.uuid}-${Date.now()}.${audioResult.format}`
+    location = await storeAudio(audioKey, audioResult.audio)
     console.log(`[${currentStep}:processTask] audio location=${location}, key=${getTaskLogKey(task)}`)
   }
 
@@ -110,6 +99,7 @@ export async function processAudioTask(task: Task) {
     output: {
       location: location,
       duration: audioResult.duration,
+      timedScript: audioResult.timedScript,
     },
   })
 

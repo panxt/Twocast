@@ -5,13 +5,17 @@ import pLimit from 'p-limit';
 import { AudioResult } from './types';
 import { parseAudioBuffer } from '@/utils/ffprobe-util';
 import { getAxiosInstance } from '@/utils/http';
+import { getSetting } from '@/lib/settings';
+import { finalizeMp3 } from './finalize_mp3';
 
 export async function genVoiceMinimax(text: string, voiceOption: VoiceOption): Promise<AudioResult> {
-    const groupId = process.env.MINIMAX_GROUP_ID;
-    const url = `https://api.minimax.chat/v1/t2a_v2?GroupId=${groupId}`;
+    const [groupId, token] = await Promise.all([getSetting('MINIMAX_GROUP_ID'), getSetting('MINIMAX_TOKEN')]);
+    if (!groupId || !token) throw new Error('MiniMax API is not configured');
+    // China-only override (see voices/route.ts comment).
+    const url = `https://api.minimaxi.com/v1/t2a_v2?GroupId=${groupId}`;
 
     const headers = {
-        'Authorization': `Bearer ${process.env.MINIMAX_TOKEN}`,
+        'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
     };
 
@@ -131,14 +135,7 @@ export async function genParts(params: GenPartsParams): Promise<AudioResult> {
 
     await Promise.all(tasks);
 
-    const audioBytes = Buffer.concat(
-        audios
-            .filter(item => item)
-            .map(item => new Uint8Array(item.audio))
-    );
-
-    // 计算时长
-    const duration = await parseAudioBuffer(audioBytes);
-
-    return {audio: audioBytes, format: audios[0].format, duration: duration.duration};
+    const valid = audios.map((audio, index) => ({ audio, line: params.items[index] })).filter(item => item.audio)
+    const rendered = await finalizeMp3(valid.map(item => item.audio.audio), valid.map(item => item.line))
+    return { audio: rendered.audio, format: 'mp3', duration: rendered.duration, timedScript: rendered.timedScript };
 }

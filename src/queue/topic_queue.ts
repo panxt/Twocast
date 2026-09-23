@@ -40,7 +40,7 @@ export function setupTopicQueue() {
   })
 }
 
-export async function processTopicTask(task: Task) {
+export async function processTopicTask(task: Task, enqueueNext = true) {
   const stepItem = taskGetStepItem(task, PodcastStep.Topic)
   console.log(`[${currentStep}:processTask] query topic, key=${getTaskLogKey(task)}`)
   let text = ''
@@ -85,5 +85,5 @@ GrowthXAI 融资1200万美元的Series A轮，并在一年内实现年收入700�
   }).where(eq(tasksTable.id, task.id)))
 
   // 传给下个队列
-  getLongTextQueue().add('long_text', { task: task })
+  if (enqueueNext) await getLongTextQueue().add('long_text', { task: task })
 }

@@ -30,7 +30,7 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [readyToSubmit, setReadyToSubmit] = useState(false);
-  const [platform, setPlatform] = useState(Platform.FishAudio.toString());
+  const [platform, setPlatform] = useState(Platform.Minimax.toString());
   const [voiceId_1, setVoiceId_1] = useState('');
   const [voiceId_2, setVoiceId_2] = useState('');
   const [outputLanguage, setOutputLanguage] = useState('auto');
@@ -48,16 +48,18 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
   const tabs = [
     { id: PodcastInputType.Topic, label: t('tabs.topic'), icon: "🧠" },
     { id: PodcastInputType.Link, label: t('tabs.link'), icon: "🔗" },
-    { id: PodcastInputType.File, label: t('tabs.upload_file'), icon: "📁" },
+    ...(process.env.NEXT_PUBLIC_VERCEL_BETA === '1' ? [] : [{ id: PodcastInputType.File, label: t('tabs.upload_file'), icon: "📁" }]),
     { id: PodcastInputType.LongText, label: t('tabs.long_text'), icon: "📄" },
-    { id: PodcastInputType.FrontPage, label: t('tabs.front_page'), icon: "🌐" },
+    ...(process.env.NEXT_PUBLIC_VERCEL_BETA === '1' ? [] : [{ id: PodcastInputType.FrontPage, label: t('tabs.front_page'), icon: "🌐" }]),
   ];
 
   const platforms: OptionItem[] = [
     { id: Platform.Minimax, label: 'Minimax', icon: '🤖' },
-    { id: Platform.Gemini, label: 'Gemini', icon: '🤖' },
-    { id: Platform.FishAudio, label: 'Fish Audio', icon: '🐟' },
-    { id: Platform.FishAudio + '_custom', label: 'Fish Audio (Custom)', icon: '🐟' },
+    ...(process.env.NEXT_PUBLIC_VERCEL_BETA === '1' ? [] : [
+      { id: Platform.Gemini, label: 'Gemini', icon: '🤖' },
+      { id: Platform.FishAudio, label: 'Fish Audio', icon: '🐟' },
+      { id: Platform.FishAudio + '_custom', label: 'Fish Audio (Custom)', icon: '🐟' },
+    ]),
   ]
   const lngOpt2OptionItem = (lngs: any[]) => {
     const audoOpt = [{
@@ -449,4 +451,4 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
       </div>
     </div>
   );
-} 
+}

@@ -1,0 +1,39 @@
+import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import ffmpegPath from 'ffmpeg-static'
+import { finalizeMp3 } from '../src/lib/podcast/finalize_mp3'
+
+async function main() {
+  const dir = mkdtempSync(path.join(tmpdir(), 'twocast-test-'))
+  try {
+    const parts = [2, 3].map((seconds, index) => {
+      const filename = path.join(dir, `part-${index}.mp3`)
+      const result = spawnSync(ffmpegPath!, [
+        '-hide_banner', '-loglevel', 'error', '-f', 'lavfi',
+        '-i', `sine=frequency=${440 + index * 220}:duration=${seconds}`,
+        '-c:a', 'libmp3lame', '-b:a', '128k', '-y', filename,
+      ])
+      assert.equal(result.status, 0, result.stderr.toString())
+      return readFileSync(filename)
+    })
+    const output = await finalizeMp3(parts, [
+      { role: '主持人', text: '第一段' }, { role: '嘉宾', text: '第二段' },
+    ])
+    const filename = path.join(dir, 'final.mp3')
+    writeFileSync(filename, output.audio)
+    assert.ok(Math.abs(output.duration - 5) < 0.15)
+    const probe = spawnSync(ffmpegPath!, ['-hide_banner', '-i', filename])
+    assert.match(probe.stderr.toString(), /Duration:\s*00:00:05\./)
+    assert.ok(output.timedScript[1].startMs >= 1900 && output.timedScript[1].startMs <= 2100)
+    assert.ok(output.audio.includes(Buffer.from('USLT')))
+    assert.ok(output.audio.includes(Buffer.from('SYLT')))
+    process.stdout.write(`audio metadata and lyrics verified: ${output.duration.toFixed(2)} seconds\n`)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
+main().catch(error => { console.error(error); process.exitCode = 1 })

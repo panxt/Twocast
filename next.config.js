@@ -1,4 +1,4 @@
-const { withContentlayer } = require('next-contentlayer2')
+const { withWorkflow } = require('workflow/next')
 
 const withBundleAnalyzer = require('@next/bundle-analyzer')({
   enabled: process.env.ANALYZE === 'true',
@@ -57,13 +57,11 @@ const securityHeaders = [
 /**
  * @type {import('next/dist/next-server/server/config').NextConfig}
  **/
-module.exports = () => {
-  const plugins = [withContentlayer, withBundleAnalyzer]
-  return plugins.reduce((acc, next) => next(acc), {
+const nextConfig = {
     reactStrictMode: true,
     pageExtensions: ['ts', 'tsx', 'js', 'jsx', 'md', 'mdx'],
-    eslint: {
-      dirs: ['src'],
+    outputFileTracingIncludes: {
+      '/**': ['./resources/prompts/*.md', './node_modules/ffmpeg-static/ffmpeg'],
     },
     images: {
       remotePatterns: [
@@ -100,5 +98,6 @@ module.exports = () => {
 
       return config
     },
-  })
 }
+
+module.exports = withWorkflow(withBundleAnalyzer(nextConfig))

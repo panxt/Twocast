@@ -40,7 +40,7 @@ export function setupLinkQueue() {
   })
 }
 
-export async function processLinkTask(task: Task) {
+export async function processLinkTask(task: Task, enqueueNext = true) {
   const stepItem = taskGetStepItem(task, PodcastStep.Link)
   let text = ''
   console.log(`[${currentStep}:processTask] extract text, key=${getTaskLogKey(task)}`)
@@ -59,10 +59,10 @@ export async function processLinkTask(task: Task) {
   } else {
     await queryWrap(getDb().update(tasksTable).set({
       stepsDetail: task.stepsDetail,
-      status: TaskStatus.Success,
+      status: TaskStatus.Processing,
     }).where(eq(tasksTable.id, task.id)))
   }
 
   // 传给下个队列
-  getLongTextQueue().add('long_text', { task: task })
+  if (enqueueNext) await getLongTextQueue().add('long_text', { task: task })
 }

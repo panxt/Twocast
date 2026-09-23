@@ -15,11 +15,26 @@ import { getCurrentUser } from "@/utils/user";
 import axios from "axios";
 import { Buffer } from "buffer";
 import { getFrontPageQueue } from "@/queue/front_page_queue";
+import { and, count, eq, gte, inArray } from 'drizzle-orm';
+import { start } from 'workflow/api';
+import { generatePodcastWorkflow } from '@/lib/podcast/workflow';
 
 export async function POST(req: Request) {
   const { userId, userEmail } = await getCurrentUser()
   if (!userEmail) {
-    return respErr("no auth");
+    return new Response(JSON.stringify({ error: '邀请码验证后才能生成播客' }), { status: 401, headers: { 'content-type': 'application/json' } });
+  }
+
+  const today = new Date(); today.setUTCHours(0, 0, 0, 0)
+  const [usage] = await getDb().select({ count: count() }).from(tasksTable)
+    .where(and(eq(tasksTable.userEmail, userEmail), gte(tasksTable.createdAt, today)))
+  if (usage.count >= (process.env.NODE_ENV === 'production' ? 3 : 100)) {
+    return new Response(JSON.stringify({ error: '今日生成次数已用完' }), { status: 429 })
+  }
+  const [pending] = await getDb().select({ count: count() }).from(tasksTable)
+    .where(and(eq(tasksTable.userEmail, userEmail), inArray(tasksTable.status, [TaskStatus.Pending, TaskStatus.Processing])))
+  if (pending.count >= 1) {
+    return new Response(JSON.stringify({ error: '请等待上一条播客完成' }), { status: 429 })
   }
 
   const formData = await req.formData()
@@ -31,6 +46,7 @@ export async function POST(req: Request) {
   const file = formData.get('file')
   const language = formData.get('language')
   if (type === PodcastInputType.File && file) {
+    if (process.env.NODE_ENV === 'production') return new Response(JSON.stringify({ error: '文件上传暂未开放' }), { status: 400 })
     text = await extractTextFromTextract(file as unknown as File)
     text = text.replace(/\n[\n]+/g, '\n').trim()
   } else if (text && typeof text === 'string') {
@@ -97,6 +113,17 @@ export async function POST(req: Request) {
 
   // save to db
   task.id = (await queryWrap(getDb().insert(tasksTable).values(task).returning({ id: tasksTable.id })))[0].id!
+
+  if (process.env.VERCEL === '1') {
+    try {
+      await start(generatePodcastWorkflow, [task.uuid])
+    } catch (error) {
+      await getDb().update(tasksTable).set({ status: TaskStatus.Failed,
+        statusReason: { msg: '后台任务启动失败' } }).where(eq(tasksTable.id, task.id))
+      throw error
+    }
+    return respData(task)
+  }
 
   // 传给队列
   switch (type) {

@@ -20,7 +20,7 @@ export function getDb() {
     else if (process.env.NODE_ENV === 'production' && !globalThis.db) {
         const client = postgres(process.env.DATABASE_URL!, { 
             prepare: false,
-            max: 10, // 生产环境可以设置更大的连接数
+            max: 1, // Serverless instances must not exhaust the transaction pooler.
             idle_timeout: 20,
         })
         globalThis.db = drizzle({ client });

@@ -8,11 +8,12 @@ import { taskGetStepItem } from "@/lib/podcast/task";
 import { PodcastStep } from "@/lib/podcast/types";
 import { LongTextResult } from "@/queue/types";
 import { getTaskStatusHuman } from "@/utils/task";
+import { getAudioUrl } from '@/lib/podcast/storage';
 
 export async function GET(req: NextRequest) {
     const { userId, userEmail } = await getCurrentUser()
     if (!userEmail) {
-      return respErr("no auth");
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'content-type': 'application/json' } });
     }
 
     // Get pagination parameters from URL
@@ -24,7 +25,7 @@ export async function GET(req: NextRequest) {
     const created_from = new Date(0);
     const { tasks, total } = await getUserTasks(userEmail, created_from, page, pageSize);
     
-    const tasksVO: TaskVO[] = tasks.map(task => {
+    const tasksVO: TaskVO[] = await Promise.all(tasks.map(async task => {
         let error = null
         if (task.status == TaskStatus.Failed) {
             const reason = task.statusReason as any
@@ -38,7 +39,7 @@ export async function GET(req: NextRequest) {
         const audioItem = taskGetStepItem(task, PodcastStep.Audio)
         if (audioItem) {
             result = audioItem.input as LongTextResult || {}
-            result.audio_url = audioItem.output?.location as string
+            result.audio_url = await getAudioUrl(audioItem.output?.location as string)
             result.duration = audioItem.output?.duration
         }
         return {
@@ -53,7 +54,7 @@ export async function GET(req: NextRequest) {
             updated_at: task.updatedAt,
             error: error
         }
-    });
+    }));
 
     return respData({
         items: tasksVO,

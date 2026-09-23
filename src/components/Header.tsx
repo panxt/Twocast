@@ -4,11 +4,8 @@ import { useParams, usePathname } from 'next/navigation'
 import siteMetadata from '@/data/siteMetadata'
 import headerNavLinks from '@/data/headerNavLinks'
 import Link from './mdxcomponents/Link'
-import AuthorsMenu from './AuthorsMenu'
-import MobileNav from './MobileNav'
 import ThemeSwitch from './theme/ThemeSwitch'
 import LangSwitch from './langswitch'
-import SearchButton from './search/SearchButton'
 import { useTranslation } from '@/i18n/client'
 import type { LocaleTypes } from '@/i18n/settings'
 import { getLocalePath } from '@/utils/locale-util'
@@ -56,14 +53,11 @@ export default function Header() {
                 </Link>
               )
             })}
-          {/*<AuthorsMenu className="hidden sm:block" />*/}
-          <SearchButton />
           <ThemeSwitch />
           <LangSwitch />
-          <MobileNav />
+          <Link href={getLocalePath(locale, '/settings')} className="text-sm text-gray-700 dark:text-gray-200">设置</Link>
         </div>
       </div>
     </header>
   )
 }
-

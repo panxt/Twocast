@@ -38,7 +38,7 @@ export function setupFrontPageQueue() {
   })
 }
 
-async function processFrontPageTask(task: Task) {
+export async function processFrontPageTask(task: Task, enqueueNext = true) {
   const stepItem = taskGetStepItem(task, PodcastStep.FrontPage)
   let text = '', links: { title: string, url: string }[] = []
   console.log(`[${currentStep}:processTask] extract text, key=${getTaskLogKey(task)}`)
@@ -79,5 +79,5 @@ async function processFrontPageTask(task: Task) {
   }).where(eq(tasksTable.id, task.id)))
 
   // 传给下个队列
-  addJob(getLongTextQueue(), { task: task })
+  if (enqueueNext) await addJob(getLongTextQueue(), { task: task })
 }

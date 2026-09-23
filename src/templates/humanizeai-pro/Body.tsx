@@ -1,9 +1,7 @@
 import TwSizeIndicator from "src/components/helper/TwSizeIndicator";
 import {ThemeProvider} from "src/components/theme/ThemeContext";
-import {Analytics, AnalyticsConfig} from "pliny/analytics";
 import siteMetadata from "@/data/siteMetadata";
 import SectionWideContainer from "src/components/SectionWideContainer";
-import {SearchProvider} from "src/components/search/SearchProvider";
 import Header from "src/components/Header";
 import Footer from "src/components/Footer";
 import { Toaster } from "sonner";
@@ -22,13 +20,10 @@ export default function Body({children, locale}) {
     <TwSizeIndicator />
     <ThemeProvider>
       <AudioPlayerProvider>
-        <Analytics analyticsConfig={siteMetadata.analytics as AnalyticsConfig} />
         <SectionWideContainer>
           <div className="flex h-screen flex-col justify-between font-sans">
-            <SearchProvider>
               <Header />
               <main className="mb-auto">{children}</main>
-            </SearchProvider>
             <Footer />
           </div>
         </SectionWideContainer>

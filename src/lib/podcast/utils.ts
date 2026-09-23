@@ -1,4 +1,4 @@
-import { queryChat } from "@/utils/xai"
+import { queryChat, parseLLMJson } from "@/utils/xai"
 import axios from "axios"
 import * as cheerio from 'cheerio'
 import { Platform, ScriptItem } from "./types"
@@ -84,7 +84,7 @@ export async function extractHotLinksFromUrl(url: string): Promise<{ title: stri
     { json: true }
   )
   const data = resp2.data as ChatCompletion
-  const json = JSON.parse(data.choices[0].message.content!)
+  const json = parseLLMJson<{ links: any[] }>(data.choices[0].message.content!)
   return json.links.map(link => {
     if (link.url.startsWith('http')) {
       return link
@@ -131,6 +131,6 @@ export async function analyseArticleFromUrl(url: string): Promise<ArticleData> {
   )
   const data = resp2.data as ChatCompletion
   // console.log('data', JSON.stringify(data, null, 2))
-  const json = JSON.parse(data.choices[0].message.content!)
+  const json = parseLLMJson<any>(data.choices[0].message.content!)
   return json
 }
