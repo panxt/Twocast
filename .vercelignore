@@ -1,0 +1,5 @@
+# Never upload local credentials or service state during CLI deployments.
+.env*
+.local/
+supabase/.temp/
+public/assets/audio/

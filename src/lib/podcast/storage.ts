@@ -39,7 +39,9 @@ export async function getAudioUrl(location: string): Promise<string> {
   })
   if (!response.ok) throw new Error(`Audio URL signing failed (${response.status})`)
   const data = await response.json()
-  return new URL(data.signedURL, url).toString()
+  return data.signedURL.startsWith('http')
+    ? data.signedURL
+    : new URL(`/storage/v1${data.signedURL}`, url).toString()
 }
 
 export async function readAudio(filename: string): Promise<Buffer> {
