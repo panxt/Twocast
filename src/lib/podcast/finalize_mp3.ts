@@ -104,3 +104,15 @@ export async function finalizeMp3(parts: Buffer[], script: ScriptItem[], title?:
     await rm(dir, { recursive: true, force: true })
   }
 }
+
+// Re-encode a legacy concatenated MP3 before replacing its metadata. A TLEN
+// tag alone cannot repair players that stop at the first segment's Xing header.
+export async function normalizeExistingMp3(audio: Buffer, lines: TimedScriptItem[], previousDuration: number, title: string) {
+  const normalized = await finalizeMp3([audio], [{ role: '', text: '' }], title)
+  const bytes = normalized.audio
+  const tagSize = ((bytes[6] & 127) << 21) | ((bytes[7] & 127) << 14) | ((bytes[8] & 127) << 7) | (bytes[9] & 127)
+  const rawAudio = bytes.subarray(10 + tagSize)
+  const ratio = previousDuration > 0 ? normalized.duration / previousDuration : 1
+  const timedScript = lines.map(line => ({ ...line, startMs: Math.round(line.startMs * ratio) }))
+  return { audio: embedScript(rawAudio, timedScript, normalized.duration, title), duration: normalized.duration, timedScript }
+}

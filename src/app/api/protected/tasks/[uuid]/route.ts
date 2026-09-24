@@ -19,10 +19,11 @@ export async function DELETE(_: NextRequest, context: { params: Promise<{ uuid: 
   if (task.status === TaskStatus.Pending || task.status === TaskStatus.Processing) {
     return NextResponse.json({ error: '生成中的任务暂不能删除，请等待完成' }, { status: 409 })
   }
-  const audio = taskGetStepItem(task, PodcastStep.Audio)?.output?.location
-  if (typeof audio === 'string' && audio.startsWith('supabase:')) {
-    await removeAudio([audio.slice('supabase:'.length)])
-  }
+  const audioOutput = taskGetStepItem(task, PodcastStep.Audio)?.output
+  const audioFiles = [audioOutput?.location, audioOutput?.backupLocation]
+    .filter((location): location is string => typeof location === 'string' && location.startsWith('supabase:'))
+    .map(location => location.slice('supabase:'.length))
+  if (audioFiles.length) await removeAudio(audioFiles)
   const upload = (task.userInputs as TaskUserInput)?.fileLocation
   if (upload) await removeUpload(upload)
   await getDb().delete(tasksTable).where(and(eq(tasksTable.id, task.id), eq(tasksTable.status, task.status)))

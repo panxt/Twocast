@@ -3,13 +3,7 @@ import { getDb } from '../src/db/db'
 import { tasksTable } from '../src/db/schema'
 import { taskGetStepItem } from '../src/lib/podcast/task'
 import { PodcastStep } from '../src/lib/podcast/types'
-import { embedScript, TimedScriptItem } from '../src/lib/podcast/finalize_mp3'
-
-function stripId3(audio: Buffer): Buffer {
-  if (audio.subarray(0, 3).toString() !== 'ID3') return audio
-  const size = ((audio[6] & 127) << 21) | ((audio[7] & 127) << 14) | ((audio[8] & 127) << 7) | (audio[9] & 127)
-  return audio.subarray(10 + size + ((audio[5] & 0x10) ? 10 : 0))
-}
+import { normalizeExistingMp3, TimedScriptItem } from '../src/lib/podcast/finalize_mp3'
 
 async function main() {
   const url = process.env.SUPABASE_URL?.replace(/\/$/, '')
@@ -32,6 +26,7 @@ async function main() {
     if (!downloaded.ok) throw new Error(`Download failed for ${task.uuid}: ${downloaded.status}`)
     const oldAudio = Buffer.from(await downloaded.arrayBuffer())
     if (oldAudio.includes(Buffer.from('TIT2'))) continue
+    const normalized = await normalizeExistingMp3(oldAudio, lines, duration, title)
     const backup = `backup-${filename}`
     const upload = async (name: string, bytes: Buffer, upsert: boolean) => {
       const response = await fetch(`${url}/storage/v1/object/podcast-audio/${encodeURIComponent(name)}`, {
@@ -41,7 +36,11 @@ async function main() {
       if (!response.ok) throw new Error(`Upload failed for ${name}: ${response.status}`)
     }
     await upload(backup, oldAudio, false)
-    await upload(filename, embedScript(stripId3(oldAudio), lines, duration, title), true)
+    await upload(filename, normalized.audio, true)
+    const detail = structuredClone(task.stepsDetail) as Record<PodcastStep, { output?: Record<string, unknown> }>
+    detail[PodcastStep.Audio].output = { ...detail[PodcastStep.Audio].output,
+      duration: normalized.duration, timedScript: normalized.timedScript, backupLocation: `supabase:${backup}` }
+    await getDb().update(tasksTable).set({ stepsDetail: detail, updatedAt: new Date() }).where(eq(tasksTable.id, task.id))
     process.stdout.write(`Updated ${task.uuid}; backup retained in private storage.\n`)
   }
   process.stdout.write(`${eligible} eligible successful audio file(s). ${process.argv.includes('--apply') ? 'Repair completed.' : 'Dry run; pass --apply to write.'}\n`)
