@@ -10,7 +10,9 @@ import { getTaskStatusHuman } from "@/utils/task";
 import { taskScopeWhere } from '@/lib/podcast/scope';
 
 export async function GET(req: NextRequest) {
+    const startedAt = performance.now()
     const { userId, userEmail, isAdmin, isTeamMember } = await getCurrentUser()
+    const authAt = performance.now()
     if (!userEmail) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'content-type': 'application/json' } });
     }
@@ -33,8 +35,8 @@ export async function GET(req: NextRequest) {
       sql`${tasksTable.userInputs}::text ILIKE ${`%${search}%`}`,
       sql`${tasksTable.stepsDetail}::text ILIKE ${`%${search}%`}`));
     const where = and(...conditions);
-    const [{ count: total }] = await getDb().select({ count: count() }).from(tasksTable).where(where);
     const tasks = await getDb().select({
+      totalCount: sql<number>`count(*) over ()`.mapWith(Number),
       uuid: tasksTable.uuid, userId: tasksTable.userId, userEmail: tasksTable.userEmail,
       status: tasksTable.status, statusReason: tasksTable.statusReason,
       folderPath: tasksTable.folderPath, labels: tasksTable.labels, visibility: tasksTable.visibility,
@@ -49,6 +51,9 @@ export async function GET(req: NextRequest) {
     })
       .from(tasksTable).leftJoin(sessionsTable, eq(tasksTable.userId, sessionsTable.id))
       .where(where).orderBy(desc(tasksTable.createdAt)).limit(pageSize).offset((page - 1) * pageSize);
+    const total = tasks.length ? tasks[0].totalCount :
+      (await getDb().select({ count: count() }).from(tasksTable).where(where))[0].count
+    const queriedAt = performance.now()
     
     const tasksVO: TaskVO[] = tasks.map(task => {
         let error: string | null = null
@@ -81,7 +86,7 @@ export async function GET(req: NextRequest) {
         }
     });
 
-    return respData({
+    const response = respData({
         items: tasksVO,
         pagination: {
             total,
@@ -90,4 +95,6 @@ export async function GET(req: NextRequest) {
             totalPages: Math.ceil(total / pageSize)
         }
     });
+    response.headers.set('Server-Timing', `auth;dur=${(authAt - startedAt).toFixed(1)}, db;dur=${(queriedAt - authAt).toFixed(1)}, render;dur=${(performance.now() - queriedAt).toFixed(1)}`)
+    return response
 }
