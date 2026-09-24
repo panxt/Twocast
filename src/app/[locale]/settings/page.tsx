@@ -9,8 +9,8 @@ const fields = [
 ] as const
 const secrets = new Set(['LLM_API_KEY', 'LLM_SEARCH_API_KEY', 'MINIMAX_TOKEN'])
 type Grant = { id: number; userId: number | null; inviteCodeId: number | null; capability: string; maxEpisodes: number; usedEpisodes: number }
-type User = { id: number; displayName: string | null; inviteCodeId: number | null }
-type Code = { id: number; label: string | null; usedCount: number; maxUses: number }
+type User = { id: number; displayName: string | null; inviteCodeId: number | null; teamAccess: boolean }
+type Code = { id: number; label: string | null; usedCount: number; maxUses: number; teamAccess: boolean }
 
 export default function SettingsPage() {
   const [admin, setAdmin] = useState(false)
@@ -23,6 +23,7 @@ export default function SettingsPage() {
   const [inviteCode, setInviteCode] = useState('')
   const [loginCode, setLoginCode] = useState('')
   const [inviteLabel, setInviteLabel] = useState('')
+  const [inviteTeamAccess, setInviteTeamAccess] = useState(false)
   const [grants, setGrants] = useState<Grant[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [codes, setCodes] = useState<Code[]>([])
@@ -76,7 +77,7 @@ export default function SettingsPage() {
   async function createInvite() {
     const response = await fetch('/api/admin/invites', {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ maxUses: 1, label: inviteLabel }),
+      body: JSON.stringify({ maxUses: 1, label: inviteLabel, teamAccess: inviteTeamAccess }),
     })
     const data = await response.json()
     setInviteCode(response.ok ? data.code : '')
@@ -109,6 +110,15 @@ export default function SettingsPage() {
   async function revoke(id: number) {
     const response = await fetch(`/api/admin/grants?id=${id}`, { method: 'DELETE' })
     setMessage(response.ok ? '已撤销授权' : (await response.json()).error)
+    if (response.ok) await load()
+  }
+  async function setTeamAccess(userId: number, teamAccess: boolean) {
+    const response = await fetch('/api/admin/members', {
+      method: 'PATCH', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ userId, teamAccess }),
+    })
+    const data = await response.json()
+    setMessage(response.ok ? (teamAccess ? '已加入团队' : '已改为体验用户') : data.error || '更新失败')
     if (response.ok) await load()
   }
 
@@ -153,10 +163,23 @@ export default function SettingsPage() {
     {admin && <>
       <section className="space-y-3 rounded-xl border p-5">
         <h2 className="text-lg font-semibold">邀请码</h2>
+        <p className="text-sm text-gray-500">体验用户只能看自己的内容；团队成员还能查看被明确共享到团队的节目。</p>
         <div className="flex gap-2"><input placeholder="备注，例如：朋友 A" value={inviteLabel}
           onChange={event => setInviteLabel(event.target.value)} className="min-w-0 flex-1 rounded border px-3 py-2 dark:bg-gray-800" />
           <button onClick={createInvite} className="rounded bg-indigo-600 px-4 py-2 text-white">生成单次邀请码</button></div>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={inviteTeamAccess}
+          onChange={event => setInviteTeamAccess(event.target.checked)} />将受邀者加入团队</label>
         {inviteCode && <output className="block break-all rounded bg-gray-100 p-3 font-mono dark:bg-gray-800">{inviteCode}</output>}
+      </section>
+      <section className="space-y-3 rounded-xl border p-5">
+        <h2 className="text-lg font-semibold">团队成员</h2>
+        <p className="text-sm text-gray-500">旧邀请码和已有账号默认是体验用户；可在这里逐个加入团队。成员仅能管理自己的节目。</p>
+        <div className="divide-y text-sm dark:divide-gray-700">{users.map(user => <div key={user.id} className="flex items-center justify-between gap-3 py-2">
+          <span>用户 #{user.id} {user.displayName || ''} · {user.teamAccess ? '团队成员' : '体验用户'}</span>
+          <button onClick={() => setTeamAccess(user.id, !user.teamAccess)} className="rounded border px-3 py-1.5 text-xs">
+            {user.teamAccess ? '移出团队' : '加入团队'}
+          </button>
+        </div>)}</div>
       </section>
       <section className="space-y-3 rounded-xl border p-5">
         <h2 className="text-lg font-semibold">共享 API 授权</h2>
@@ -165,7 +188,7 @@ export default function SettingsPage() {
           <select aria-label="授权对象" value={target} onChange={event => setTarget(event.target.value)} className="rounded border px-2 py-2 dark:bg-gray-800">
             <option value="">选择用户或邀请码</option>
             {users.map(user => <option key={user.id} value={`user:${user.id}`}>用户 #{user.id} {user.displayName || ''}</option>)}
-            {codes.map(code => <option key={code.id} value={`code:${code.id}`}>邀请码 #{code.id} {code.label || ''}</option>)}
+            {codes.map(code => <option key={code.id} value={`code:${code.id}`}>邀请码 #{code.id} {code.label || ''} · {code.teamAccess ? '团队' : '体验'}</option>)}
           </select>
           <select aria-label="能力" value={capability} onChange={event => setCapability(event.target.value)} className="rounded border px-2 py-2 dark:bg-gray-800">
             <option value="llm">大模型</option><option value="tts">语音</option></select>

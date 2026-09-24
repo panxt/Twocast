@@ -27,6 +27,7 @@ export const tasksTable = pgTable('tasks', {
   isFeatured: boolean('is_featured').default(false),
   folderPath: varchar('folder_path', { length: 255 }).notNull().default('/'),
   labels: json('labels').$type<string[]>().notNull().default([]),
+  visibility: varchar('visibility', { length: 8 }).$type<'private' | 'team'>().notNull().default('private'),
   // 创建时间
   createdAt: timestamp('created_at', { withTimezone: true }),
   // 更新时间
@@ -39,6 +40,7 @@ export const inviteCodesTable = pgTable('invite_codes', {
   label: varchar('label', { length: 120 }),
   maxUses: integer('max_uses').notNull().default(1),
   usedCount: integer('used_count').notNull().default(0),
+  teamAccess: boolean('team_access').notNull().default(false),
   expiresAt: timestamp('expires_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -48,6 +50,7 @@ export const sessionsTable = pgTable('invite_sessions', {
   tokenHash: varchar('token_hash', { length: 64 }).notNull().unique(),
   inviteCodeId: integer('invite_code_id'),
   role: varchar('role', { length: 16 }).notNull().default('member'),
+  teamAccess: boolean('team_access').notNull().default(false),
   loginCodeHash: varchar('login_code_hash', { length: 64 }).unique(),
   displayName: varchar('display_name', { length: 80 }),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),

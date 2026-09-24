@@ -3,12 +3,13 @@ import { getCurrentUser } from '@/utils/user'
 import { getTaskByUuid } from '@/models/task'
 import { TaskUserInput } from '@/lib/podcast/types'
 import { getUploadUrl, readLocalUpload } from '@/lib/podcast/storage'
+import { canReadTask } from '@/lib/podcast/access'
 
 export async function GET(_: Request, context: { params: Promise<{ uuid: string }> }) {
   const user = await getCurrentUser()
   if (!user.userEmail) return NextResponse.json({ error: '请先登录' }, { status: 401 })
   const task = await getTaskByUuid((await context.params).uuid)
-  if (!task || (!user.isAdmin && task.userEmail !== user.userEmail)) {
+  if (!task || !canReadTask(task, user)) {
     return NextResponse.json({ error: '文件不存在' }, { status: 404 })
   }
   const input = task.userInputs as TaskUserInput

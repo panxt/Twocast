@@ -9,8 +9,9 @@ export function UserPanel() {
   return <main className="min-h-[70vh] bg-gray-50 px-4 py-8 dark:bg-gray-950 sm:py-12">
     <div className="mx-auto max-w-6xl space-y-8">
       <header>
-        <h1 className="text-3xl font-semibold tracking-tight text-gray-950 dark:text-white">播客工作台</h1>
-        <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">把资料变成可收听、可整理的节目。</p>
+        <p className="mb-2 text-xs font-semibold tracking-[0.24em] text-indigo-600 dark:text-indigo-300">驿路通·声笺</p>
+        <h1 className="text-3xl font-semibold tracking-tight text-gray-950 dark:text-white">团队播客工作台</h1>
+        <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">把团队资料变成可收听、可整理、可分享的节目。</p>
       </header>
       <section aria-label="创建播客">
         <h2 className="mb-4 text-lg font-semibold">新建节目</h2>

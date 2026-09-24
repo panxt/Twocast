@@ -36,11 +36,11 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: L
       }
     },
     robots: {
-      index: true,
-      follow: true,
+      index: false,
+      follow: false,
       googleBot: {
-        index: true,
-        follow: true,
+        index: false,
+        follow: false,
         "max-video-preview": -1,
         "max-image-preview": "large",
         "max-snippet": -1
@@ -79,7 +79,7 @@ export default async function RootLayout({
       {/*<link rel="manifest" href="/static/favicons/site.webmanifest"/>*/}
       {/*<link rel="mask-icon" href="/static/favicons/safari-pinned-tab.svg" color="#5bbad5"/>*/}
       <link rel="alternate" type="application/rss+xml" href="/feed.xml" />
-      <link rel="icon" type="image/png" href={siteMetadata.favicon} />
+      <link rel="icon" type="image/svg+xml" href={siteMetadata.favicon} />
       <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" integrity="sha384-4LISF5TTJX/fLmGSxO53rV4miRxdg84mZsxmO8Rx5jGtp/LbrixFETvWa5a6sESd" crossOrigin="anonymous" />
       {process.env.NEXT_PUBLIC_GOOGLE_ADS_ID && <script async src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${process.env.NEXT_PUBLIC_GOOGLE_ADS_ID}`} crossOrigin="anonymous"></script>}
     </head>

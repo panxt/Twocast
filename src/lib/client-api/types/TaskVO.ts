@@ -10,6 +10,7 @@ export interface TaskVO {
   owner_name?: string;
   folder_path?: string;
   labels?: string[];
+  visibility?: 'private' | 'team';
   error?: string | null;
   action?: string | null;
   llm_name?: string | null;

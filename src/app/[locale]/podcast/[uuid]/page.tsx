@@ -8,6 +8,7 @@ import PodcastTabs from './components/PodcastTabs';
 import { getCurrentUser } from '@/utils/user';
 import { getAudioUrl } from '@/lib/podcast/storage';
 import { safeAudioBasename } from '@/lib/podcast/filename';
+import { canReadTask } from '@/lib/podcast/access';
 
 interface PodcastPageProps {
   params: Promise<{
@@ -23,7 +24,7 @@ export default async function PodcastPage({ params }: PodcastPageProps) {
   // 使用 server action 查询 uuid 获取 task
   const task = await getTaskByUuid(uuid);
   
-  if (!task || (!user.isAdmin && task.userEmail !== user.userEmail)) {
+  if (!task || !canReadTask(task, user)) {
     notFound();
   }
 

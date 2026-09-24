@@ -2,62 +2,35 @@
 
 import { useParams, usePathname } from 'next/navigation'
 import siteMetadata from '@/data/siteMetadata'
-import headerNavLinks from '@/data/headerNavLinks'
 import Link from './mdxcomponents/Link'
 import ThemeSwitch from './theme/ThemeSwitch'
 import LangSwitch from './langswitch'
-import { useTranslation } from '@/i18n/client'
 import type { LocaleTypes } from '@/i18n/settings'
 import { getLocalePath } from '@/utils/locale-util'
 
 export default function Header() {
   const locale = useParams()?.locale as LocaleTypes
-  const { t } = useTranslation(locale, 'home')
   const pathname = usePathname()
+  const home = getLocalePath(locale, '/')
+  const settings = getLocalePath(locale, '/settings')
 
-  return (
-    <header>
-      <div className="flex items-center justify-between py-10 px-4">
-        <div>
-          <Link href={getLocalePath(locale, '/')} aria-label={siteMetadata.headerTitle}>
-            <div className="flex items-center justify-between">
-              {siteMetadata.siteLogo && <div className="mr-3">
-                <img src={siteMetadata.siteLogo} alt="logo" className="w-10 h-10 rounded-full" />
-              </div>}
-              {typeof siteMetadata.headerTitle === 'string' ? (
-                <div className="h-6 text-2xl font-semibold sm:block dark:text-white">
-                  {siteMetadata.headerTitle}
-                </div>
-              ) : (
-                siteMetadata.headerTitle
-              )}
-            </div>
-          </Link>
-        </div>
-        <div className="flex items-center space-x-4 rtl:space-x-reverse leading-5 sm:space-x-6">
-          {headerNavLinks
-            .filter((link) => {
-              return link.href !== '/'
-            })
-            .map((link) => {
-              const isSelected = pathname!.includes(link.href as string)
-              return (
-                <Link
-                  key={link.title}
-                  href={getLocalePath(locale, `${link.href}`)}
-                  className={`hidden font-medium ${
-                    isSelected ? 'text-primary-500' : 'text-gray-900 dark:text-gray-100'
-                  }  sm:block`}
-                >
-                  {t(`header.${link.title.toLowerCase()}`)}
-                </Link>
-              )
-            })}
-          <ThemeSwitch />
-          <LangSwitch />
-          <Link href={getLocalePath(locale, '/settings')} className="text-sm text-gray-700 dark:text-gray-200">设置</Link>
-        </div>
-      </div>
-    </header>
-  )
+  return <header className="border-b border-slate-200/80 bg-white/85 backdrop-blur-lg dark:border-slate-800 dark:bg-slate-950/85">
+    <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
+      <Link href={home} aria-label={siteMetadata.headerTitle} className="flex min-w-0 items-center gap-3">
+        <img src={siteMetadata.siteLogo} alt="" className="h-10 w-10 shrink-0 rounded-xl shadow-sm" />
+        <span className="min-w-0">
+          <span className="block truncate text-lg font-bold tracking-tight text-slate-950 dark:text-white">{siteMetadata.headerTitle}</span>
+          <span className="hidden text-xs tracking-wide text-slate-500 dark:text-slate-400 sm:block">团队声音工作台</span>
+        </span>
+      </Link>
+      <nav aria-label="主导航" className="flex shrink-0 items-center gap-3 text-sm sm:gap-5">
+        <Link href={home} aria-current={pathname === home ? 'page' : undefined}
+          className="hidden font-medium text-slate-700 hover:text-indigo-600 dark:text-slate-200 sm:block">工作台</Link>
+        <Link href={settings} aria-current={pathname === settings ? 'page' : undefined}
+          className="font-medium text-slate-700 hover:text-indigo-600 dark:text-slate-200">设置</Link>
+        <ThemeSwitch />
+        <LangSwitch />
+      </nav>
+    </div>
+  </header>
 }
