@@ -132,6 +132,7 @@ export async function POST(req: Request) {
       fileName,
       fileLocation,
       apiAccess: reservation.access,
+      reservedGrantIds: reservation.grantIds,
     },
     status: TaskStatus.Pending,
     consumedCredits: 0,
