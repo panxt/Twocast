@@ -4,7 +4,7 @@ import { getDb } from "@/db/db";
 import { tasksTable } from "@/db/schema";
 import { NewTask } from "@/db/types";
 import { taskSetStepItem } from "@/lib/podcast/task";
-import { PodcastInputType, PodcastStep } from "@/lib/podcast/types";
+import { PodcastInputType, PodcastStep, Platform } from "@/lib/podcast/types";
 import { genTaskId } from '@/models/task';
 import { getLinkQueue } from "@/queue/link_queue";
 import { getLongTextQueue } from "@/queue/long_text_queue";
@@ -12,15 +12,18 @@ import { getTopicQueue } from "@/queue/topic_queue";
 import { TaskStatus } from "@/types/task";
 import { queryWrap } from "@/utils/db-util";
 import { getCurrentUser } from "@/utils/user";
-import axios from "axios";
 import { Buffer } from "buffer";
+import { extractText, getDocumentProxy } from 'unpdf';
+import { removeUpload, storeUpload } from '@/lib/podcast/storage';
 import { getFrontPageQueue } from "@/queue/front_page_queue";
 import { and, count, eq, gte, inArray } from 'drizzle-orm';
 import { start } from 'workflow/api';
 import { generatePodcastWorkflow } from '@/lib/podcast/workflow';
+import { reserveApiAccess, releaseApiGrants } from '@/lib/api-access';
 
 export async function POST(req: Request) {
-  const { userId, userEmail } = await getCurrentUser()
+  const user = await getCurrentUser()
+  const { userId, userEmail } = user
   if (!userEmail) {
     return new Response(JSON.stringify({ error: '邀请码验证后才能生成播客' }), { status: 401, headers: { 'content-type': 'application/json' } });
   }
@@ -45,10 +48,40 @@ export async function POST(req: Request) {
   const voice_id_2 = formData.get('voice_id_2')
   const file = formData.get('file')
   const language = formData.get('language')
+  if (!Object.values(PodcastInputType).includes(type as PodcastInputType) ||
+      platform !== Platform.Minimax || typeof voice_id_1 !== 'string' || !voice_id_1 ||
+      typeof voice_id_2 !== 'string' || !voice_id_2) {
+    return respErr('输入类型或语音配置无效')
+  }
+  const taskUuid = genTaskId()
+  let fileName: string | undefined
+  let fileLocation: string | undefined
+  let fileBytes: Buffer | undefined
+  let fileExtension: string | undefined
   if (type === PodcastInputType.File && file) {
-    if (process.env.NODE_ENV === 'production') return new Response(JSON.stringify({ error: '文件上传暂未开放' }), { status: 400 })
-    text = await extractTextFromTextract(file as unknown as File)
+    if (!(file instanceof File)) return respErr('请选择文件')
+    const extension = file.name.split('.').pop()?.toLowerCase()
+    if (!extension || !['pdf', 'txt', 'md', 'text'].includes(extension)) return respErr('只支持 PDF、TXT、Markdown')
+    if (file.size < 1 || file.size > 4_000_000) return respErr('文件大小须在 4 MB 以内')
+    const bytes = Buffer.from(await file.arrayBuffer())
+    try {
+      if (extension === 'pdf') {
+        if (bytes.subarray(0, 5).toString() !== '%PDF-') return respErr('PDF 文件格式无效')
+        const document = await getDocumentProxy(new Uint8Array(bytes))
+        if (document.numPages > 200) return respErr('PDF 最多支持 200 页')
+        const result = await extractText(document, { mergePages: true })
+        text = result.text
+      } else {
+        text = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+      }
+    } catch {
+      return respErr('无法提取文件文字；扫描版 PDF 需要先进行 OCR')
+    }
     text = text.replace(/\n[\n]+/g, '\n').trim()
+    if (!text || text.length > 100_000) return respErr('提取的文字为空或超过 10 万字')
+    fileName = file.name.slice(0, 255)
+    fileBytes = bytes
+    fileExtension = extension
   } else if (text && typeof text === 'string') {
     text = text.trim()
     if (text.length > 100_000) {
@@ -57,6 +90,24 @@ export async function POST(req: Request) {
   }
   if (!text) {
     return respErr("invalid params: text is empty");
+  }
+
+  let reservation: Awaited<ReturnType<typeof reserveApiAccess>>
+  try {
+    reservation = await reserveApiAccess(user, type === PodcastInputType.Topic)
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : 'API 权限不足' }),
+      { status: 403, headers: { 'content-type': 'application/json' } })
+  }
+  if (fileBytes && fileExtension) {
+    try {
+      fileLocation = await storeUpload(`${taskUuid}.${fileExtension}`, fileBytes,
+        fileExtension === 'pdf' ? 'application/pdf' : 'text/plain')
+    } catch (error) {
+      await releaseApiGrants(reservation.grantIds)
+      return new Response(JSON.stringify({ error: '文件保存失败，请稍后重试' }),
+        { status: 500, headers: { 'content-type': 'application/json' } })
+    }
   }
 
   // check credits
@@ -69,7 +120,7 @@ export async function POST(req: Request) {
 
   const task: NewTask = {
     userId: userId,
-    uuid: genTaskId(),
+    uuid: taskUuid,
     userEmail: userEmail,
     userInputs: {
       type: type as PodcastInputType,
@@ -78,7 +129,9 @@ export async function POST(req: Request) {
       voice_id_1: voice_id_1,
       voice_id_2: voice_id_2,
       language: language as string,
-      // file: resp?.Location || ""
+      fileName,
+      fileLocation,
+      apiAccess: reservation.access,
     },
     status: TaskStatus.Pending,
     consumedCredits: 0,
@@ -112,7 +165,13 @@ export async function POST(req: Request) {
 
 
   // save to db
-  task.id = (await queryWrap(getDb().insert(tasksTable).values(task).returning({ id: tasksTable.id })))[0].id!
+  try {
+    task.id = (await queryWrap(getDb().insert(tasksTable).values(task).returning({ id: tasksTable.id })))[0].id!
+  } catch (error) {
+    await releaseApiGrants(reservation.grantIds)
+    if (fileLocation) await removeUpload(fileLocation).catch(() => undefined)
+    throw error
+  }
 
   if (process.env.VERCEL === '1') {
     try {
@@ -120,6 +179,7 @@ export async function POST(req: Request) {
     } catch (error) {
       await getDb().update(tasksTable).set({ status: TaskStatus.Failed,
         statusReason: { msg: '后台任务启动失败' } }).where(eq(tasksTable.id, task.id))
+      await releaseApiGrants(reservation.grantIds)
       throw error
     }
     return respData(task)
@@ -143,38 +203,4 @@ export async function POST(req: Request) {
   }
 
   return respData(task);
-}
-
-async function extractTextFromTextract(file: File): Promise<string> {
-  // 1. 获取文件名和类型
-  const name = file.name || '';
-  const ext = name.split('.').pop()?.toLowerCase();
-  // 2. 读取文件内容为 Buffer
-  const arrayBuffer = await file.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-  // 3. 转为 base64
-  const base64String = buffer.toString('base64');
-
-  // 4. 构造请求体
-  const data = {
-    data: base64String,
-    file_type: ext,
-  };
-
-  // 5. 发送 POST 请求
-  try {
-    const resp = await axios.post(process.env.SERVICE_TEXTRACT_API!, data, {
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      timeout: 60000, // 60s 超时
-    });
-    if (resp.data && typeof resp.data.text === 'string') {
-      return resp.data.text;
-    } else {
-      throw new Error('Textract API 响应无效');
-    }
-  } catch (err: any) {
-    throw new Error('Textract API 调用失败: ' + (err?.message || err));
-  }
 }

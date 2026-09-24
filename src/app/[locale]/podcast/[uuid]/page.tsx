@@ -7,6 +7,7 @@ import PodcastPlayer from './components/PodcastPlayer';
 import PodcastTabs from './components/PodcastTabs';
 import { getCurrentUser } from '@/utils/user';
 import { getAudioUrl } from '@/lib/podcast/storage';
+import { safeAudioBasename } from '@/lib/podcast/filename';
 
 interface PodcastPageProps {
   params: Promise<{
@@ -36,6 +37,7 @@ export default async function PodcastPage({ params }: PodcastPageProps) {
   const audioData = audioItem.input as LongTextResult;
   const audioOutput = audioItem.output as AudioOutput;
   const audioUrl = await getAudioUrl(audioOutput?.location);
+  const downloadUrl = await getAudioUrl(audioOutput?.location, `${safeAudioBasename(audioData.title)}.mp3`)
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50/50 via-white to-purple-50/30 dark:from-gray-900 dark:via-gray-800 dark:to-purple-900/20">
@@ -55,7 +57,8 @@ export default async function PodcastPage({ params }: PodcastPageProps) {
 
         {/* 播放器区域 */}
         <div className="max-w-4xl mx-auto mb-8 sm:mb-12">
-          <PodcastPlayer audioUrl={audioUrl} title={audioData.title} duration={audioOutput?.duration} />
+          <PodcastPlayer audioUrl={audioUrl} downloadUrl={downloadUrl} title={audioData.title} duration={audioOutput?.duration}
+            lyricsUrl={audioOutput?.timedScript?.length ? `/api/podcast/${uuid}/lyrics` : undefined} />
         </div>
 
         {/* 内容标签页 */}

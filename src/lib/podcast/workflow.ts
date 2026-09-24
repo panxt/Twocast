@@ -14,6 +14,7 @@ import { genVoiceMinimax } from './audio_parts'
 import { finalizeMp3 } from './finalize_mp3'
 import { readAudio, removeAudio, storeAudio } from './storage'
 import { TaskStatus } from '@/types/task'
+import { withApiContext } from '@/lib/api-context'
 
 async function loadTask(uuid: string) {
   const task = await getTaskByUuid(uuid)
@@ -25,16 +26,21 @@ async function prepareInput(uuid: string) {
   'use step'
   const task = await loadTask(uuid)
   const type = (task.userInputs as TaskUserInput).type
-  if (type === PodcastInputType.Topic) await processTopicTask(task, false)
-  else if (type === PodcastInputType.Link) await processLinkTask(task, false)
-  else if (type === PodcastInputType.FrontPage) await processFrontPageTask(task, false)
-  else if (type !== PodcastInputType.LongText) throw new Error(`Unsupported input type: ${type}`)
+  const access = (task.userInputs as TaskUserInput).apiAccess || { llm: 'admin' as const, tts: 'admin' as const }
+  await withApiContext({ userId: task.userId, access }, async () => {
+    if (type === PodcastInputType.Topic) await processTopicTask(task, false)
+    else if (type === PodcastInputType.Link) await processLinkTask(task, false)
+    else if (type === PodcastInputType.FrontPage) await processFrontPageTask(task, false)
+    else if (type !== PodcastInputType.LongText && type !== PodcastInputType.File) throw new Error(`Unsupported input type: ${type}`)
+  })
   return uuid
 }
 
 async function writeScript(uuid: string) {
   'use step'
-  await processLongTextTask(await loadTask(uuid), false)
+  const task = await loadTask(uuid)
+  const access = (task.userInputs as TaskUserInput).apiAccess || { llm: 'admin' as const, tts: 'admin' as const }
+  await withApiContext({ userId: task.userId, access }, () => processLongTextTask(task, false))
   return uuid
 }
 
@@ -51,7 +57,9 @@ async function getAudioPlan(uuid: string) {
 
 async function generateAudioSegment(uuid: string, index: number, line: ScriptItem, voiceId: string) {
   'use step'
-  const audio = await genVoiceMinimax(line.text, { id: voiceId })
+  const task = await loadTask(uuid)
+  const access = (task.userInputs as TaskUserInput).apiAccess || { llm: 'admin' as const, tts: 'admin' as const }
+  const audio = await withApiContext({ userId: task.userId, access }, () => genVoiceMinimax(line.text, { id: voiceId }))
   const filename = `tmp-${uuid}-${index}.mp3`
   await storeAudio(filename, audio.audio)
   return filename
@@ -60,9 +68,10 @@ async function generateAudioSegment(uuid: string, index: number, line: ScriptIte
 async function finalizeAudio(uuid: string, files: string[], script: ScriptItem[]) {
   'use step'
   const parts = await Promise.all(files.map(readAudio))
-  const result = await finalizeMp3(parts, script)
-  const location = await storeAudio(`${uuid}.mp3`, result.audio)
   const task = await loadTask(uuid)
+  const scriptResult = taskGetStepItem(task, PodcastStep.Audio).input as LongTextResult
+  const result = await finalizeMp3(parts, script, scriptResult?.title || 'ToCast 播客')
+  const location = await storeAudio(`${uuid}.mp3`, result.audio)
   taskUpdateStepItem(task, PodcastStep.Audio, {
     output: { location, duration: result.duration, timedScript: result.timedScript },
   })

@@ -7,13 +7,15 @@ import { formatDuration } from '@/utils/time';
 
 interface PodcastPlayerProps {
   audioUrl: string;
+  downloadUrl?: string;
   title: string;
   artist?: string;
   thumbnail?: string;
   duration?: number;
+  lyricsUrl?: string;
 }
 
-export default function PodcastPlayer({ audioUrl, title, artist, thumbnail, duration }: PodcastPlayerProps) {
+export default function PodcastPlayer({ audioUrl, downloadUrl, title, artist, thumbnail, duration, lyricsUrl }: PodcastPlayerProps) {
   const { play, currentTrack, isPlaying, isLoading } = useAudioPlayer();
   const {t} = useTranslation('podcast');
 
@@ -89,7 +91,7 @@ export default function PodcastPlayer({ audioUrl, title, artist, thumbnail, dura
           </button>
           {/* 下载按钮 */}
           <a
-            href={audioUrl || undefined}
+            href={downloadUrl || audioUrl || undefined}
             download={audioUrl ? `${title}.mp3` : undefined}
             title={audioUrl ? t('download') || 'Download' : 'Audio not available'}
             className={`group relative w-12 h-12 sm:w-14 sm:h-14 bg-white/30 dark:bg-gray-700/60 rounded-2xl flex items-center justify-center transition-all duration-300 shadow-md backdrop-blur-sm ${
@@ -101,6 +103,8 @@ export default function PodcastPlayer({ audioUrl, title, artist, thumbnail, dura
           >
             <ArrowDownTrayIcon className="w-6 h-6 sm:w-7 sm:h-7 text-gray-800 dark:text-gray-200 transition-colors duration-300 group-hover:text-indigo-500 dark:group-hover:text-purple-400" />
           </a>
+          {lyricsUrl && <a href={lyricsUrl} download title="下载同步歌词 (.lrc)"
+            className="rounded-xl bg-white/60 px-3 py-3 text-sm font-medium text-gray-800 dark:bg-gray-700 dark:text-gray-100">下载歌词</a>}
         </div>
 
         {/* 状态指示 */}
@@ -124,7 +128,10 @@ export default function PodcastPlayer({ audioUrl, title, artist, thumbnail, dura
         <p className="text-xs text-gray-500 dark:text-gray-500 text-center max-w-xs">
           {t('click_play_button_to_start_listening')}
         </p>
+        {lyricsUrl && <p className="text-center text-xs text-gray-500 dark:text-gray-400">
+          网易云本地音乐如未识别内嵌脚本，请把下载的 MP3 与同名 LRC 放在同一文件夹后重新扫描。
+        </p>}
       </div>
     </div>
   );
-} 
+}

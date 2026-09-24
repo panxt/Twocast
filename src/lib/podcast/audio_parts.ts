@@ -5,11 +5,12 @@ import pLimit from 'p-limit';
 import { AudioResult } from './types';
 import { parseAudioBuffer } from '@/utils/ffprobe-util';
 import { getAxiosInstance } from '@/utils/http';
-import { getSetting } from '@/lib/settings';
+import { getApiSetting } from '@/lib/settings';
 import { finalizeMp3 } from './finalize_mp3';
+import { describeApiFailure } from '@/lib/api-errors';
 
 export async function genVoiceMinimax(text: string, voiceOption: VoiceOption): Promise<AudioResult> {
-    const [groupId, token] = await Promise.all([getSetting('MINIMAX_GROUP_ID'), getSetting('MINIMAX_TOKEN')]);
+    const [groupId, token] = await Promise.all([getApiSetting('MINIMAX_GROUP_ID'), getApiSetting('MINIMAX_TOKEN')]);
     if (!groupId || !token) throw new Error('MiniMax API is not configured');
     // China-only override (see voices/route.ts comment).
     const url = `https://api.minimaxi.com/v1/t2a_v2?GroupId=${groupId}`;
@@ -30,9 +31,9 @@ export async function genVoiceMinimax(text: string, voiceOption: VoiceOption): P
         language_boost: 'auto',
     };
 
-    const response = await axios.post(url, payload, { headers });
+    const response = await axios.post(url, payload, { headers, validateStatus: () => true });
     if (response.status !== 200) {
-        throw new Error(`http error: status code ${response.status}, ${response.data}`);
+        throw describeApiFailure(response.status, 'MiniMax TTS');
     }
 
     const data = response.data;
@@ -44,8 +45,11 @@ export async function genVoiceMinimax(text: string, voiceOption: VoiceOption): P
     }
 
     if (status !== 2) {
-        const text = JSON.stringify(data.base_resp);
-        throw new Error(`generate voice failed: ${text}`);
+        const reason = String(data.base_resp?.status_msg || data.base_resp?.message || '未知错误');
+        if (/quota|balance|insufficient|余额|额度|欠费|limit/i.test(reason)) {
+            throw new Error('MiniMax TTS API 额度已用完，请更换自己的 Key 或联系管理员');
+        }
+        throw new Error(`MiniMax TTS 生成失败：${reason.slice(0, 160)}`);
     }
 
     const audioHex = data.data.audio;

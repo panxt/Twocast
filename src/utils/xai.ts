@@ -1,9 +1,10 @@
 import { getAxiosInstance } from "./http"
-import { getSetting } from '@/lib/settings'
+import { getApiSetting } from '@/lib/settings'
+import { describeApiFailure } from '@/lib/api-errors'
 
 export async function queryChat(query: string, options: { json: boolean } = { json: false }) {
     const [apiKey, url, model] = await Promise.all([
-        getSetting('LLM_API_KEY'), getSetting('LLM_CHAT_URL'), getSetting('LLM_CHAT_MODEL')
+        getApiSetting('LLM_API_KEY'), getApiSetting('LLM_CHAT_URL'), getApiSetting('LLM_CHAT_MODEL')
     ])
     if (!apiKey) {
         throw new Error("LLM_API_KEY is not set")
@@ -25,17 +26,18 @@ export async function queryChat(query: string, options: { json: boolean } = { js
                 "content": query
             }
         ],
-        "search_parameters": {
-            "mode": "auto"
-        },
         "model": model
     }
+    if (new URL(url).hostname === 'api.x.ai') payload.search_parameters = { mode: 'auto' }
     if (options.json) {
         payload.response_format = {
             type: "json_object"
         }
     }
-    return getAxiosInstance().post(url, payload, { headers })
+    const response = await getAxiosInstance().post(url, payload, { headers })
+    if (response.status !== 200) throw describeApiFailure(response.status, '大模型')
+    if (response.data?.error) throw new Error(`大模型返回错误：${String(response.data.error?.message || response.data.error).slice(0, 200)}`)
+    return response
 }
 
 /**
@@ -59,7 +61,7 @@ export function parseLLMJson<T = unknown>(content: string): T {
 
 export async function querySearch(query: string, options: { json: boolean } = { json: false }) {
     const [apiKey, url, model] = await Promise.all([
-        getSetting('LLM_SEARCH_API_KEY'), getSetting('LLM_SEARCH_URL'), getSetting('LLM_SEARCH_MODEL')
+        getApiSetting('LLM_SEARCH_API_KEY'), getApiSetting('LLM_SEARCH_URL'), getApiSetting('LLM_SEARCH_MODEL')
     ])
     if (!apiKey) {
         throw new Error("LLM_SEARCH_API_KEY is not set")
@@ -81,15 +83,16 @@ export async function querySearch(query: string, options: { json: boolean } = { 
                 "content": query
             }
         ],
-        "search_parameters": {
-            "mode": "auto"
-        },
         "model": model
     }
+    if (new URL(url).hostname === 'api.x.ai') payload.search_parameters = { mode: 'auto' }
     if (options.json) {
         payload.response_format = {
             type: "json_object"
         }
     }
-    return getAxiosInstance().post(url, payload, { headers })
+    const response = await getAxiosInstance().post(url, payload, { headers })
+    if (response.status !== 200) throw describeApiFailure(response.status, '搜索模型')
+    if (response.data?.error) throw new Error(`搜索模型返回错误：${String(response.data.error?.message || response.data.error).slice(0, 200)}`)
+    return response
 }

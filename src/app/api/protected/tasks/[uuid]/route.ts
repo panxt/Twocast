@@ -1,0 +1,54 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { and, eq } from 'drizzle-orm'
+import { getDb } from '@/db/db'
+import { tasksTable } from '@/db/schema'
+import { getCurrentUser } from '@/utils/user'
+import { TaskStatus } from '@/types/task'
+import { PodcastStep, TaskUserInput } from '@/lib/podcast/types'
+import { taskGetStepItem } from '@/lib/podcast/task'
+import { removeAudio, removeUpload } from '@/lib/podcast/storage'
+
+export async function DELETE(_: NextRequest, context: { params: Promise<{ uuid: string }> }) {
+  const user = await getCurrentUser()
+  if (!user.userEmail) return NextResponse.json({ error: '请先登录' }, { status: 401 })
+  const { uuid } = await context.params
+  const [task] = await getDb().select().from(tasksTable).where(eq(tasksTable.uuid, uuid)).limit(1)
+  if (!task || (!user.isAdmin && task.userEmail !== user.userEmail)) {
+    return NextResponse.json({ error: '任务不存在' }, { status: 404 })
+  }
+  if (task.status === TaskStatus.Pending || task.status === TaskStatus.Processing) {
+    return NextResponse.json({ error: '生成中的任务暂不能删除，请等待完成' }, { status: 409 })
+  }
+  const audio = taskGetStepItem(task, PodcastStep.Audio)?.output?.location
+  if (typeof audio === 'string' && audio.startsWith('supabase:')) {
+    await removeAudio([audio.slice('supabase:'.length)])
+  }
+  const upload = (task.userInputs as TaskUserInput)?.fileLocation
+  if (upload) await removeUpload(upload)
+  await getDb().delete(tasksTable).where(and(eq(tasksTable.id, task.id), eq(tasksTable.status, task.status)))
+  return NextResponse.json({ ok: true })
+}
+
+export async function PATCH(request: NextRequest, context: { params: Promise<{ uuid: string }> }) {
+  const user = await getCurrentUser()
+  if (!user.userEmail) return NextResponse.json({ error: '请先登录' }, { status: 401 })
+  const { uuid } = await context.params
+  const [task] = await getDb().select().from(tasksTable).where(eq(tasksTable.uuid, uuid)).limit(1)
+  if (!task || (!user.isAdmin && task.userEmail !== user.userEmail)) {
+    return NextResponse.json({ error: '任务不存在' }, { status: 404 })
+  }
+  const body = await request.json().catch(() => null)
+  const folderPath = body?.folderPath
+  const labels = body?.labels
+  if (typeof folderPath !== 'string' || !folderPath.startsWith('/') || !folderPath.endsWith('/') ||
+      folderPath.length > 255 || folderPath.includes('\\') ||
+      folderPath.split('/').some((segment, index) => index > 0 && index < folderPath.split('/').length - 1 &&
+        (!segment || segment.length > 40 || [...segment].some(character => character.charCodeAt(0) < 32)))) {
+    return NextResponse.json({ error: '目录格式须为 /目录/子目录/' }, { status: 400 })
+  }
+  if (!Array.isArray(labels) || labels.length > 8 || labels.some(label => typeof label !== 'string' || !label.trim() || label.length > 24)) {
+    return NextResponse.json({ error: '最多设置 8 个标签，每个不超过 24 字' }, { status: 400 })
+  }
+  await getDb().update(tasksTable).set({ folderPath, labels, updatedAt: new Date() }).where(eq(tasksTable.id, task.id))
+  return NextResponse.json({ ok: true })
+}

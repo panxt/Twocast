@@ -11,7 +11,7 @@ axios.interceptors.response.use(function (response) {
   // Any status codes that falls outside the range of 2xx cause this function to trigger
   // Do something with response error
   // console.log('axios error', error)
-  toast.error(error.response?.data?.message || error.message || 'Network Error')
+  toast.error(error.response?.data?.error || error.response?.data?.message || error.message || 'Network Error')
   const resp = error.response
   console.log('apiRequest', resp.status)
   if (resp.status === 401) {

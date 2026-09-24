@@ -1,9 +1,9 @@
 /** @type {import("pliny/config").PlinyConfig } */
 const siteMetadata = {
-  title: 'Twocast',
+  title: '播客工作台',
   author: 'Admin',
-  headerTitle: 'Twocast',
-  description: 'Twocast',
+  headerTitle: '播客工作台',
+  description: '音频与资料管理',
   language: 'en',
   theme: 'system', // system, dark or light
   siteUrl: process.env['NEXT_PUBLIC_SITE_URL'],
