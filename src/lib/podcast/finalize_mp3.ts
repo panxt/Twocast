@@ -4,6 +4,7 @@ import { tmpdir } from 'os'
 import path from 'path'
 import ffmpegPath from 'ffmpeg-static'
 import { ScriptItem } from './types'
+import { toLrc } from './lyrics'
 
 export type TimedScriptItem = { role: string; text: string; startMs: number }
 
@@ -12,30 +13,50 @@ function synchsafe(size: number): Buffer {
 }
 
 function id3Frame(name: string, body: Buffer): Buffer {
-  return Buffer.concat([Buffer.from(name, 'ascii'), synchsafe(body.length), Buffer.alloc(2), body])
+  const size = Buffer.alloc(4)
+  size.writeUInt32BE(body.length)
+  return Buffer.concat([Buffer.from(name, 'ascii'), size, Buffer.alloc(2), body])
 }
 
-// ID3v2.4 USLT makes the full script readable in music apps; SYLT adds
-// timestamps for apps that support synchronized lyrics.
+function utf16(text: string): Buffer {
+  return Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, 'utf16le')])
+}
+
+function id3Text(text: string): Buffer {
+  return Buffer.concat([Buffer.from([1]), utf16(text)])
+}
+
+function withoutLeadingId3(mp3: Buffer): Buffer {
+  if (mp3.length < 10 || mp3.toString('ascii', 0, 3) !== 'ID3') return mp3
+  const size = ((mp3[6] & 127) << 21) | ((mp3[7] & 127) << 14) | ((mp3[8] & 127) << 7) | (mp3[9] & 127)
+  const footer = mp3[3] === 4 && (mp3[5] & 0x10) !== 0 ? 10 : 0
+  if (10 + size + footer >= mp3.length) throw new Error('Invalid ID3 tag size')
+  return mp3.subarray(10 + size + footer)
+}
+
+// ID3v2.3/UTF-16 is understood by more desktop players than v2.4/UTF-8.
+// USLT carries LRC timestamps for players that only read the common lyrics
+// field; SYLT carries the same timings in the standard synchronized frame.
 export function embedScript(mp3: Buffer, lines: TimedScriptItem[], durationSeconds: number, title = 'ToCast 播客'): Buffer {
   const fullText = lines.map(line => `${line.role}: ${line.text}`).join('\n')
-  const uslt = Buffer.concat([Buffer.from([3]), Buffer.from('zho\0', 'ascii'), Buffer.from(fullText, 'utf8')])
-  const syltHeader = Buffer.concat([Buffer.from([3]), Buffer.from('zho', 'ascii'), Buffer.from([2, 1, 0])])
+  const uslt = Buffer.concat([Buffer.from([1]), Buffer.from('zho', 'ascii'), Buffer.alloc(2), utf16(toLrc(lines, title))])
+  const syltHeader = Buffer.concat([Buffer.from([1]), Buffer.from('zho', 'ascii'), Buffer.from([2, 1]), Buffer.alloc(2)])
   const syltLines = lines.map(line => {
     const timestamp = Buffer.alloc(4)
     timestamp.writeUInt32BE(Math.max(0, Math.round(line.startMs)))
-    return Buffer.concat([Buffer.from(`${line.role}: ${line.text}\0`, 'utf8'), timestamp])
+    return Buffer.concat([utf16(`${line.role}: ${line.text}`), Buffer.alloc(2), timestamp])
   })
-  const tlen = Buffer.from(`\x03${Math.round(durationSeconds * 1000)}`, 'utf8')
+  const tlen = Buffer.from(`\x00${Math.round(durationSeconds * 1000)}`, 'ascii')
   const frames = Buffer.concat([
-    id3Frame('TIT2', Buffer.from(`\x03${title}`, 'utf8')),
-    id3Frame('TPE1', Buffer.from('\x03ToCast', 'utf8')),
-    id3Frame('TALB', Buffer.from('\x03ToCast 播客', 'utf8')),
+    id3Frame('TIT2', id3Text(title)),
+    id3Frame('TPE1', id3Text('ToCast')),
+    id3Frame('TALB', id3Text('ToCast 播客')),
     id3Frame('USLT', uslt), id3Frame('SYLT', Buffer.concat([syltHeader, ...syltLines])),
+    id3Frame('TXXX', Buffer.concat([Buffer.from([1]), utf16('LYRICS'), Buffer.alloc(2), utf16(fullText)])),
     id3Frame('TLEN', tlen),
   ])
-  const header = Buffer.concat([Buffer.from('ID3', 'ascii'), Buffer.from([4, 0, 0]), synchsafe(frames.length)])
-  return Buffer.concat([header, frames, mp3])
+  const header = Buffer.concat([Buffer.from('ID3', 'ascii'), Buffer.from([3, 0, 0]), synchsafe(frames.length)])
+  return Buffer.concat([header, frames, withoutLeadingId3(mp3)])
 }
 
 async function runFfmpeg(binary: string, input: string, output: string) {
