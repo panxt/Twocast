@@ -13,6 +13,14 @@ import { formatDuration } from '@/utils/time'
 interface ListPanelProps { refreshTrigger?: number; apiUrl: string; showPagination?: boolean }
 type FolderOption = { path: string; label: string; depth: number; episodes: number }
 const titleOf = (task: TaskVO) => task.result?.title || task.user_inputs?.fileName || task.user_inputs?.text?.slice(0, 48) || '未命名播客'
+const progressLabel = (task: TaskVO) => {
+  if (task.status === TaskStatus.Pending) return '等待后台启动'
+  if (task.progress?.stage === 'preparing') return '正在整理素材'
+  if (task.progress?.stage === 'script') return '正在生成脚本'
+  if (task.progress?.stage === 'audio') return `正在配音 ${task.progress.current || 0}/${task.progress.total || '?'} 段`
+  if (task.progress?.stage === 'finalizing') return '正在合成音频与脚本'
+  return '正在生成'
+}
 
 export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: ListPanelProps) {
   const { i18n } = useTranslation()
@@ -27,6 +35,7 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: Lis
   const [folder, setFolder] = useState('')
   const [folders, setFolders] = useState<FolderOption[]>([])
   const [scope, setScope] = useState('mine')
+  const [scopeReady, setScopeReady] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
   const [isTeamMember, setIsTeamMember] = useState(false)
   const [viewerId, setViewerId] = useState(0)
@@ -36,6 +45,7 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: Lis
   const [busy, setBusy] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [revision, setRevision] = useState(0)
+  const [directoryRevision, setDirectoryRevision] = useState(0)
 
   useEffect(() => {
     fetch('/api/auth/me').then(response => response.json()).then(data => {
@@ -44,13 +54,14 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: Lis
       setViewerId(Number(data.userId) || 0)
       if (data.isAdmin) setScope('all')
       else if (data.isTeamMember) setScope('team')
-    }).catch(() => undefined)
+    }).catch(() => undefined).finally(() => setScopeReady(true))
   }, [])
   useEffect(() => {
     const timer = setTimeout(() => { setPage(1); setQuery(search) }, 300)
     return () => clearTimeout(timer)
   }, [search])
   useEffect(() => {
+    if (!scopeReady) return
     let alive = true
     fetch(`/api/protected/folders?${new URLSearchParams({ scope })}`, { cache: 'no-store' })
       .then(async response => {
@@ -59,11 +70,13 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: Lis
       }).then(body => { if (alive) setFolders(body.folders || []) })
       .catch(error => { if (alive) toast.error(error.message) })
     return () => { alive = false }
-  }, [scope, refreshTrigger, revision])
+  }, [scopeReady, scope, refreshTrigger, directoryRevision])
   useEffect(() => {
+    if (!scopeReady) return
     let alive = true
     const params = new URLSearchParams({ page: String(page), page_size: '15', status, search: query, scope, folder })
-    fetch(`${apiUrl}?${params}`, { cache: 'no-store' }).then(async response => {
+    const controller = new AbortController()
+    fetch(`${apiUrl}?${params}`, { cache: 'no-store', signal: controller.signal }).then(async response => {
       if (!response.ok) throw new Error('列表加载失败')
       return response.json()
     }).then(body => {
@@ -71,9 +84,9 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: Lis
       setItems(body.data.items)
       setPages(Math.max(1, body.data.pagination.totalPages))
       setTotal(body.data.pagination.total)
-    }).catch(error => { if (alive) toast.error(error.message) }).finally(() => { if (alive) setLoading(false) })
-    return () => { alive = false }
-  }, [apiUrl, page, status, query, scope, folder, refreshTrigger, revision])
+    }).catch(error => { if (alive && error.name !== 'AbortError') toast.error(error.message) }).finally(() => { if (alive) setLoading(false) })
+    return () => { alive = false; controller.abort() }
+  }, [scopeReady, apiUrl, page, status, query, scope, folder, refreshTrigger, revision])
   useEffect(() => {
     if (!items.some(item => item.status === TaskStatus.Pending || item.status === TaskStatus.Processing)) return
     const timer = setTimeout(() => setRevision(value => value + 1), 5000)
@@ -89,6 +102,7 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: Lis
       if (!response.ok) throw new Error(body.error || '删除失败')
       toast.success('已删除')
       setRevision(value => value + 1)
+      setDirectoryRevision(value => value + 1)
     } catch (error) { toast.error(error instanceof Error ? error.message : '删除失败') }
     finally { setBusy(null) }
   }
@@ -103,6 +117,7 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: Lis
       if (!response.ok) throw new Error(body.error || '保存失败')
       setEditing(null)
       setRevision(value => value + 1)
+      setDirectoryRevision(value => value + 1)
       toast.success('分类已保存')
     } catch (error) { toast.error(error instanceof Error ? error.message : '保存失败') }
     finally { setBusy(null) }
@@ -119,6 +134,7 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: Lis
       if (!response.ok) throw new Error(body.error || '更新共享范围失败')
       toast.success(next === 'team' ? '已共享给团队成员' : '已设为仅自己可见')
       setRevision(value => value + 1)
+      setDirectoryRevision(value => value + 1)
     } catch (error) { toast.error(error instanceof Error ? error.message : '更新共享范围失败') }
     finally { setBusy(null) }
   }
@@ -190,6 +206,18 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: Lis
           </>}
         </div>
         {(task.labels?.length || 0) > 0 && <div className="ml-14 mt-2 flex flex-wrap gap-1">{task.labels?.map(label => <span key={label} className="rounded bg-gray-100 px-2 py-0.5 text-xs dark:bg-gray-700">{label}</span>)}</div>}
+        {(task.status === TaskStatus.Pending || task.status === TaskStatus.Processing) && <div className="ml-14 mt-3 max-w-xl" role="status">
+          <div className="mb-1 flex justify-between text-xs text-indigo-700 dark:text-indigo-300">
+            <span>{progressLabel(task)}</span>
+            {task.progress?.stage === 'audio' && Boolean(task.progress.total) && <span>{Math.round(100 * Math.min(task.progress.current || 0, task.progress.total!) / task.progress.total!)}%</span>}
+          </div>
+          <div role="progressbar" aria-label={progressLabel(task)} aria-valuemin={0} aria-valuemax={task.progress?.stage === 'audio' ? task.progress.total : undefined}
+            aria-valuenow={task.progress?.stage === 'audio' ? task.progress.current : undefined}
+            className="h-2 overflow-hidden rounded-full bg-indigo-100 dark:bg-indigo-950">
+            <div className={`h-full rounded-full bg-indigo-600 transition-all ${task.progress?.stage === 'audio' ? '' : 'w-1/3 animate-pulse'}`}
+              style={task.progress?.stage === 'audio' && task.progress.total ? { width: `${100 * Math.min(task.progress.current || 0, task.progress.total) / task.progress.total}%` } : undefined} />
+          </div>
+        </div>}
         {task.status === TaskStatus.Failed && task.error && <p className="ml-14 mt-2 text-xs text-red-600">{task.error}</p>}
         {editing === task.uuid && <div className="ml-14 mt-3 grid gap-2 rounded-lg bg-gray-50 p-3 dark:bg-gray-800 sm:grid-cols-[1fr_1fr_auto]">
           <input aria-label="目录路径" value={folderDraft} onChange={event => setFolderDraft(event.target.value)} placeholder="/资料/科技/" className="rounded border px-2 py-1 text-sm dark:bg-gray-900" />
