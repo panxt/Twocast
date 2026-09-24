@@ -8,8 +8,8 @@ const siteMetadata = {
   theme: 'system', // system, dark or light
   siteUrl: process.env['NEXT_PUBLIC_SITE_URL'],
   // siteRepo: 'https://github.com/PxlSyl/tailwind-nextjs-starter-blog-i18n',
-  favicon: '/brand-mark.svg',
-  siteLogo: '/brand-mark.svg',
+  favicon: '/assets/brand-mark.svg',
+  siteLogo: '/assets/brand-mark.svg',
   socialBanner: '/static/images/twitter-card.png',
   // mastodon: 'https://mastodon.social/@mastodonuser',
   // email: 'address@yoursite.com',
