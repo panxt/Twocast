@@ -34,8 +34,9 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: Lis
   const [query, setQuery] = useState('')
   const [folder, setFolder] = useState('')
   const [folders, setFolders] = useState<FolderOption[]>([])
-  const [scope, setScope] = useState('mine')
-  const [scopeReady, setScopeReady] = useState(false)
+  const [scope, setScope] = useState('')
+  const [defaultScope, setDefaultScope] = useState('mine')
+  const [viewerLoaded, setViewerLoaded] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
   const [isTeamMember, setIsTeamMember] = useState(false)
   const [viewerId, setViewerId] = useState(0)
@@ -44,24 +45,16 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: Lis
   const [labelsDraft, setLabelsDraft] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [revision, setRevision] = useState(0)
   const [directoryRevision, setDirectoryRevision] = useState(0)
 
-  useEffect(() => {
-    fetch('/api/auth/me').then(response => response.json()).then(data => {
-      setIsAdmin(Boolean(data.isAdmin))
-      setIsTeamMember(Boolean(data.isTeamMember))
-      setViewerId(Number(data.userId) || 0)
-      if (data.isAdmin) setScope('all')
-      else if (data.isTeamMember) setScope('team')
-    }).catch(() => undefined).finally(() => setScopeReady(true))
-  }, [])
   useEffect(() => {
     const timer = setTimeout(() => { setPage(1); setQuery(search) }, 300)
     return () => clearTimeout(timer)
   }, [search])
   useEffect(() => {
-    if (!scopeReady) return
+    if (!viewerLoaded) return
     let alive = true
     fetch(`/api/protected/folders?${new URLSearchParams({ scope })}`, { cache: 'no-store' })
       .then(async response => {
@@ -70,10 +63,11 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: Lis
       }).then(body => { if (alive) setFolders(body.folders || []) })
       .catch(error => { if (alive) toast.error(error.message) })
     return () => { alive = false }
-  }, [scopeReady, scope, refreshTrigger, directoryRevision])
+  }, [viewerLoaded, scope, refreshTrigger, directoryRevision])
   useEffect(() => {
-    if (!scopeReady) return
     let alive = true
+    setLoading(true)
+    setLoadError('')
     const params = new URLSearchParams({ page: String(page), page_size: '15', status, search: query, scope, folder })
     const controller = new AbortController()
     fetch(`${apiUrl}?${params}`, { cache: 'no-store', signal: controller.signal }).then(async response => {
@@ -84,9 +78,18 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: Lis
       setItems(body.data.items)
       setPages(Math.max(1, body.data.pagination.totalPages))
       setTotal(body.data.pagination.total)
-    }).catch(error => { if (alive && error.name !== 'AbortError') toast.error(error.message) }).finally(() => { if (alive) setLoading(false) })
+      if (body.data.viewer) {
+        setIsAdmin(Boolean(body.data.viewer.isAdmin))
+        setIsTeamMember(Boolean(body.data.viewer.isTeamMember))
+        setViewerId(Number(body.data.viewer.userId) || 0)
+        setDefaultScope(body.data.viewer.scope || 'mine')
+        setViewerLoaded(true)
+      }
+    }).catch(error => {
+      if (alive && error.name !== 'AbortError') setLoadError(error.message)
+    }).finally(() => { if (alive) setLoading(false) })
     return () => { alive = false; controller.abort() }
-  }, [scopeReady, apiUrl, page, status, query, scope, folder, refreshTrigger, revision])
+  }, [apiUrl, page, status, query, scope, folder, refreshTrigger, revision])
   useEffect(() => {
     if (!items.some(item => item.status === TaskStatus.Pending || item.status === TaskStatus.Processing)) return
     const timer = setTimeout(() => setRevision(value => value + 1), 5000)
@@ -149,7 +152,7 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: Lis
       <div><h2 className="text-xl font-semibold text-gray-900 dark:text-white">音频与文件</h2>
         <p className="mt-1 text-sm text-gray-500">共 {total} 条 · 私人内容仅自己和管理员可见，共享节目供团队查看</p></div>
       <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">查看范围
-        <select aria-label="查看范围" value={scope} onChange={event => { setScope(event.target.value); setFolder(''); setPage(1) }}
+        <select aria-label="查看范围" value={scope || defaultScope} onChange={event => { setScope(event.target.value); setFolder(''); setPage(1) }}
           className="rounded-lg border px-3 py-2 dark:bg-gray-800">
           <option value="mine">仅我的</option>
           {isTeamMember && <option value="team">团队与我的</option>}
@@ -175,7 +178,8 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: Lis
     </div>
     <div className="mt-5 divide-y divide-gray-200 dark:divide-gray-700">
       {loading && <p className="py-10 text-center text-sm text-gray-500">正在加载…</p>}
-      {!loading && items.length === 0 && <p className="py-10 text-center text-sm text-gray-500">没有匹配的记录</p>}
+      {!loading && loadError && <p role="alert" className="py-10 text-center text-sm text-red-600">{loadError}。<button className="underline" onClick={() => setRevision(value => value + 1)}>重试</button></p>}
+      {!loading && !loadError && items.length === 0 && <p className="py-10 text-center text-sm text-gray-500">没有匹配的记录</p>}
       {items.map(task => <div key={task.uuid} className="py-4">
         <div className="flex flex-wrap items-center gap-3">
           <button onClick={() => togglePlay(task)} disabled={!task.result?.audio_url}
