@@ -88,6 +88,7 @@ export async function GET(req: NextRequest) {
 
     const response = respData({
         items: tasksVO,
+        viewer: { userId, isAdmin, isTeamMember, scope },
         pagination: {
             total,
             page,
