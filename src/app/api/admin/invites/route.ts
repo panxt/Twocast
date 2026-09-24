@@ -1,4 +1,5 @@
 import { randomBytes } from 'crypto'
+import { and, eq, gt, isNull, or } from 'drizzle-orm'
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/db/db'
 import { inviteCodesTable } from '@/db/schema'
@@ -27,4 +28,19 @@ export async function POST(request: NextRequest) {
   const code = randomBytes(18).toString('base64url').toUpperCase()
   await getDb().insert(inviteCodesTable).values({ codeHash: sha256(code), label, maxUses, teamAccess })
   return NextResponse.json({ code }) // Plaintext is shown only once.
+}
+
+export async function DELETE(request: NextRequest) {
+  if (!(await getCurrentUser()).isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const id = Number(request.nextUrl.searchParams.get('id'))
+  if (!Number.isInteger(id) || id < 1) {
+    return NextResponse.json({ error: '邀请码 ID 无效' }, { status: 400 })
+  }
+  const [closed] = await getDb().update(inviteCodesTable)
+    .set({ expiresAt: new Date() })
+    .where(and(eq(inviteCodesTable.id, id), gt(inviteCodesTable.maxUses, inviteCodesTable.usedCount),
+      or(isNull(inviteCodesTable.expiresAt), gt(inviteCodesTable.expiresAt, new Date()))))
+    .returning({ id: inviteCodesTable.id })
+  if (!closed) return NextResponse.json({ error: '邀请码不存在、已关闭或已用完' }, { status: 404 })
+  return NextResponse.json({ ok: true })
 }

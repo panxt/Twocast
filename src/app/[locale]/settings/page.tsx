@@ -10,7 +10,9 @@ const fields = [
 const secrets = new Set(['LLM_API_KEY', 'LLM_SEARCH_API_KEY', 'MINIMAX_TOKEN'])
 type Grant = { id: number; userId: number | null; inviteCodeId: number | null; capability: string; maxEpisodes: number; usedEpisodes: number }
 type User = { id: number; displayName: string | null; inviteCodeId: number | null; teamAccess: boolean }
-type Code = { id: number; label: string | null; usedCount: number; maxUses: number; teamAccess: boolean }
+type Code = { id: number; label: string | null; usedCount: number; maxUses: number; teamAccess: boolean; expiresAt: string | null }
+const inviteState = (code: Code) => code.expiresAt && new Date(code.expiresAt).getTime() <= Date.now()
+  ? '已关闭' : code.usedCount >= code.maxUses ? '已用完' : `可用 ${code.maxUses - code.usedCount} 次`
 
 export default function SettingsPage() {
   const [admin, setAdmin] = useState(false)
@@ -82,6 +84,13 @@ export default function SettingsPage() {
     const data = await response.json()
     setInviteCode(response.ok ? data.code : '')
     setMessage(response.ok ? '请现在复制邀请码；之后无法再次查看明文。' : data.error || '创建失败')
+    if (response.ok) await load()
+  }
+  async function closeInvite(id: number) {
+    if (!window.confirm('关闭后，这个邀请码不能再用于加入。已加入的成员仍可登录。')) return
+    const response = await fetch(`/api/admin/invites?id=${id}`, { method: 'DELETE' })
+    const data = await response.json()
+    setMessage(response.ok ? '邀请码已关闭' : data.error || '关闭失败')
     if (response.ok) await load()
   }
   async function renewLoginCode() {
@@ -170,6 +179,15 @@ export default function SettingsPage() {
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={inviteTeamAccess}
           onChange={event => setInviteTeamAccess(event.target.checked)} />将受邀者加入团队</label>
         {inviteCode && <output className="block break-all rounded bg-gray-100 p-3 font-mono dark:bg-gray-800">{inviteCode}</output>}
+        <div className="divide-y rounded-lg border px-3 text-sm dark:divide-gray-700 dark:border-gray-700">
+          {codes.length === 0 && <p className="py-3 text-gray-500">还没有邀请码</p>}
+          {codes.map(code => <div key={code.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+            <div><span className="font-medium">{code.label || `邀请码 #${code.id}`}</span>
+              <p className="mt-1 text-xs text-gray-500">{code.teamAccess ? '团队成员' : '体验用户'} · {inviteState(code)} · 已加入 {code.usedCount} 人</p></div>
+            {inviteState(code).startsWith('可用') && <button onClick={() => closeInvite(code.id)}
+              className="rounded border border-red-200 px-3 py-1.5 text-xs text-red-700">关闭</button>}
+          </div>)}
+        </div>
       </section>
       <section className="space-y-3 rounded-xl border p-5">
         <h2 className="text-lg font-semibold">团队成员</h2>
@@ -188,7 +206,7 @@ export default function SettingsPage() {
           <select aria-label="授权对象" value={target} onChange={event => setTarget(event.target.value)} className="rounded border px-2 py-2 dark:bg-gray-800">
             <option value="">选择用户或邀请码</option>
             {users.map(user => <option key={user.id} value={`user:${user.id}`}>用户 #{user.id} {user.displayName || ''}</option>)}
-            {codes.map(code => <option key={code.id} value={`code:${code.id}`}>邀请码 #{code.id} {code.label || ''} · {code.teamAccess ? '团队' : '体验'}</option>)}
+            {codes.map(code => <option key={code.id} value={`code:${code.id}`}>邀请码 #{code.id} {code.label || ''} · {code.teamAccess ? '团队' : '体验'} · {inviteState(code)}</option>)}
           </select>
           <select aria-label="能力" value={capability} onChange={event => setCapability(event.target.value)} className="rounded border px-2 py-2 dark:bg-gray-800">
             <option value="llm">大模型</option><option value="tts">语音</option></select>
