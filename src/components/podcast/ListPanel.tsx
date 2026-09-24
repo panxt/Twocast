@@ -11,6 +11,7 @@ import { getLocalePath } from '@/utils/locale-util'
 import { formatDuration } from '@/utils/time'
 
 interface ListPanelProps { refreshTrigger?: number; apiUrl: string; showPagination?: boolean }
+type FolderOption = { path: string; label: string; depth: number; episodes: number }
 const titleOf = (task: TaskVO) => task.result?.title || task.user_inputs?.fileName || task.user_inputs?.text?.slice(0, 48) || '未命名播客'
 
 export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: ListPanelProps) {
@@ -24,6 +25,7 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: Lis
   const [search, setSearch] = useState('')
   const [query, setQuery] = useState('')
   const [folder, setFolder] = useState('')
+  const [folders, setFolders] = useState<FolderOption[]>([])
   const [scope, setScope] = useState('mine')
   const [isAdmin, setIsAdmin] = useState(false)
   const [isTeamMember, setIsTeamMember] = useState(false)
@@ -48,6 +50,16 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: Lis
     const timer = setTimeout(() => { setPage(1); setQuery(search) }, 300)
     return () => clearTimeout(timer)
   }, [search])
+  useEffect(() => {
+    let alive = true
+    fetch(`/api/protected/folders?${new URLSearchParams({ scope })}`, { cache: 'no-store' })
+      .then(async response => {
+        if (!response.ok) throw new Error('目录加载失败')
+        return response.json()
+      }).then(body => { if (alive) setFolders(body.folders || []) })
+      .catch(error => { if (alive) toast.error(error.message) })
+    return () => { alive = false }
+  }, [scope, refreshTrigger, revision])
   useEffect(() => {
     let alive = true
     const params = new URLSearchParams({ page: String(page), page_size: '15', status, search: query, scope, folder })
@@ -116,13 +128,12 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: Lis
     else play({ id: task.uuid, url: task.result.audio_url, title: titleOf(task), duration: task.result.duration })
   }
 
-  const folders = Array.from(new Set(items.map(item => item.folder_path || '/'))).sort()
   return <section className="rounded-2xl border border-gray-200 bg-white/90 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900/80 sm:p-6">
     <div className="flex flex-wrap items-end justify-between gap-4">
       <div><h2 className="text-xl font-semibold text-gray-900 dark:text-white">音频与文件</h2>
         <p className="mt-1 text-sm text-gray-500">共 {total} 条 · 私人内容仅自己和管理员可见，共享节目供团队查看</p></div>
       <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">查看范围
-        <select aria-label="查看范围" value={scope} onChange={event => { setScope(event.target.value); setPage(1) }}
+        <select aria-label="查看范围" value={scope} onChange={event => { setScope(event.target.value); setFolder(''); setPage(1) }}
           className="rounded-lg border px-3 py-2 dark:bg-gray-800">
           <option value="mine">仅我的</option>
           {isTeamMember && <option value="team">团队与我的</option>}
@@ -138,12 +149,13 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: Lis
         <option value="all">全部状态</option><option value="success">已完成</option>
         <option value="failed">失败</option><option value="pending">等待中</option><option value="processing">生成中</option>
       </select>
-      <div>
-        <input aria-label="按目录筛选" list="podcast-folder-suggestions" placeholder="目录，如 /资料/" value={folder}
-          onChange={event => { setFolder(event.target.value); setPage(1) }}
-          className="w-full rounded-lg border px-3 py-2 text-sm dark:bg-gray-800" />
-        <datalist id="podcast-folder-suggestions">{folders.map(path => <option key={path} value={path} />)}</datalist>
-      </div>
+      <select aria-label="按目录筛选" value={folder} onChange={event => { setFolder(event.target.value); setPage(1) }}
+        className="w-full rounded-lg border px-3 py-2 text-sm dark:bg-gray-800">
+        <option value="">所有目录</option>
+        {folders.map(item => <option key={item.path} value={item.path}>
+          {'— '.repeat(item.depth)}{item.label} · {item.episodes}
+        </option>)}
+      </select>
     </div>
     <div className="mt-5 divide-y divide-gray-200 dark:divide-gray-700">
       {loading && <p className="py-10 text-center text-sm text-gray-500">正在加载…</p>}

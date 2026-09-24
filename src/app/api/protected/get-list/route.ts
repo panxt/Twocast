@@ -11,6 +11,7 @@ import { PodcastStep } from "@/lib/podcast/types";
 import { LongTextResult } from "@/queue/types";
 import { getTaskStatusHuman } from "@/utils/task";
 import { getAudioUrl } from '@/lib/podcast/storage';
+import { taskScopeWhere } from '@/lib/podcast/scope';
 
 export async function GET(req: NextRequest) {
     const { userId, userEmail, isAdmin, isTeamMember } = await getCurrentUser()
@@ -26,11 +27,12 @@ export async function GET(req: NextRequest) {
     const search = (searchParams.get('search') || '').trim().slice(0, 80);
     const folder = (searchParams.get('folder') || '').slice(0, 255);
     const scope = searchParams.get('scope') || (isAdmin ? 'all' : isTeamMember ? 'team' : 'mine');
-    const owner = eq(tasksTable.userEmail, userEmail);
-    const conditions = [scope === 'all' && isAdmin ? undefined : scope === 'team' && isTeamMember ?
-      or(owner, eq(tasksTable.visibility, 'team')) : owner];
+    const conditions = [taskScopeWhere({ userEmail, isAdmin, isTeamMember }, scope)];
     if (status && status !== 'all') conditions.push(eq(tasksTable.status, status));
-    if (folder) conditions.push(eq(tasksTable.folderPath, folder));
+    if (folder) {
+      if (!folder.startsWith('/') || !folder.endsWith('/')) return respErr('目录格式无效');
+      conditions.push(sql`left(${tasksTable.folderPath}, ${folder.length}) = ${folder}`);
+    }
     if (search) conditions.push(or(ilike(tasksTable.uuid, `%${search}%`),
       sql`${tasksTable.userInputs}::text ILIKE ${`%${search}%`}`,
       sql`${tasksTable.stepsDetail}::text ILIKE ${`%${search}%`}`));
