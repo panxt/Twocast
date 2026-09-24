@@ -6,11 +6,7 @@ import { TaskStatus } from "@/types/task";
 import { NextRequest } from "next/server";
 import { TaskVO } from "@/lib/client-api/types/TaskVO";
 import { getCurrentUser } from "@/utils/user";
-import { taskGetStepItem } from "@/lib/podcast/task";
-import { PodcastStep } from "@/lib/podcast/types";
-import { LongTextResult } from "@/queue/types";
 import { getTaskStatusHuman } from "@/utils/task";
-import { getAudioUrl } from '@/lib/podcast/storage';
 import { taskScopeWhere } from '@/lib/podcast/scope';
 
 export async function GET(req: NextRequest) {
@@ -38,44 +34,52 @@ export async function GET(req: NextRequest) {
       sql`${tasksTable.stepsDetail}::text ILIKE ${`%${search}%`}`));
     const where = and(...conditions);
     const [{ count: total }] = await getDb().select({ count: count() }).from(tasksTable).where(where);
-    const tasks = await getDb().select({ task: tasksTable, ownerName: sessionsTable.displayName })
+    const tasks = await getDb().select({
+      uuid: tasksTable.uuid, userId: tasksTable.userId, userEmail: tasksTable.userEmail,
+      status: tasksTable.status, statusReason: tasksTable.statusReason,
+      folderPath: tasksTable.folderPath, labels: tasksTable.labels, visibility: tasksTable.visibility,
+      createdAt: tasksTable.createdAt, updatedAt: tasksTable.updatedAt,
+      ownerName: sessionsTable.displayName,
+      fileName: sql<string | null>`${tasksTable.userInputs}::jsonb ->> 'fileName'`,
+      inputPreview: sql<string | null>`left(${tasksTable.userInputs}::jsonb ->> 'text', 48)`,
+      title: sql<string | null>`${tasksTable.stepsDetail}::jsonb #>> '{audio,input,title}'`,
+      audioLocation: sql<string | null>`${tasksTable.stepsDetail}::jsonb #>> '{audio,output,location}'`,
+      duration: sql<number | null>`(${tasksTable.stepsDetail}::jsonb #>> '{audio,output,duration}')::double precision`,
+      progress: sql<TaskVO['progress']>`${tasksTable.result}::jsonb -> 'progress'`,
+    })
       .from(tasksTable).leftJoin(sessionsTable, eq(tasksTable.userId, sessionsTable.id))
       .where(where).orderBy(desc(tasksTable.createdAt)).limit(pageSize).offset((page - 1) * pageSize);
     
-    const tasksVO: TaskVO[] = await Promise.all(tasks.map(async ({ task, ownerName }) => {
-        let error = null
-        if (task.status == TaskStatus.Failed) {
-            const reason = task.statusReason as any
+    const tasksVO: TaskVO[] = tasks.map(task => {
+        let error: string | null = null
+        if (task.status === TaskStatus.Failed) {
+            const reason = task.statusReason as { detail?: string; msg?: string } | null
             if (reason?.detail) {
                 error = reason.detail
             } else {
-                error = reason?.msg
+                error = reason?.msg || null
             }
-        }
-        let result: any = {}
-        const audioItem = taskGetStepItem(task, PodcastStep.Audio)
-        if (audioItem?.output?.location) {
-            result = audioItem.input as LongTextResult || {}
-            result.audio_url = await getAudioUrl(audioItem.output?.location as string)
-            result.duration = audioItem.output?.duration
         }
         return {
             uuid: task.uuid,
             user_id: task.userId,
             user_email: task.userEmail,
-            owner_name: ownerName || (task.userEmail === 'admin@twocast.invalid' ? '管理员' : `用户 #${task.userId}`),
+            owner_name: task.ownerName || (task.userEmail === 'admin@twocast.invalid' ? '管理员' : `用户 #${task.userId}`),
             folder_path: task.folderPath,
             labels: task.labels,
             visibility: task.visibility,
             error,
             status: task.status as TaskStatus,
-            status_human: getTaskStatusHuman(task.status as TaskStatus, true),
-            user_inputs: task.userInputs,
-            result: result,
+            status_human: getTaskStatusHuman(task.status as TaskStatus),
+            user_inputs: { fileName: task.fileName, text: task.inputPreview },
+            result: { title: task.title,
+              audio_url: task.audioLocation ? `/api/protected/tasks/${encodeURIComponent(task.uuid)}/audio` : undefined,
+              duration: task.duration },
+            progress: task.progress || null,
             created_at: task.createdAt,
             updated_at: task.updatedAt,
         }
-    }));
+    });
 
     return respData({
         items: tasksVO,

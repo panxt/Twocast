@@ -22,9 +22,18 @@ async function loadTask(uuid: string) {
   return task
 }
 
+async function updateProgress(taskId: number, stage: 'preparing' | 'script' | 'audio' | 'finalizing', current?: number, total?: number) {
+  const now = new Date()
+  await getDb().update(tasksTable).set({
+    status: TaskStatus.Processing, currentStep: stage, statusAt: now, updatedAt: now,
+    result: { progress: { stage, current, total } },
+  }).where(eq(tasksTable.id, taskId))
+}
+
 async function prepareInput(uuid: string) {
   'use step'
   const task = await loadTask(uuid)
+  await updateProgress(task.id, 'preparing')
   const type = (task.userInputs as TaskUserInput).type
   const access = (task.userInputs as TaskUserInput).apiAccess || { llm: 'admin' as const, tts: 'admin' as const }
   await withApiContext({ userId: task.userId, access }, async () => {
@@ -39,6 +48,7 @@ async function prepareInput(uuid: string) {
 async function writeScript(uuid: string) {
   'use step'
   const task = await loadTask(uuid)
+  await updateProgress(task.id, 'script')
   const access = (task.userInputs as TaskUserInput).apiAccess || { llm: 'admin' as const, tts: 'admin' as const }
   await withApiContext({ userId: task.userId, access }, () => processLongTextTask(task, false))
   return uuid
@@ -52,23 +62,26 @@ async function getAudioPlan(uuid: string) {
   const step = taskGetStepItem(task, PodcastStep.Audio)
   const result = step.input as LongTextResult
   if (!result?.script?.length) throw new Error('No generated script')
+  await updateProgress(task.id, 'audio', 0, result.script.length)
   return { script: result.script, voiceIds: [inputs.voice_id_1!, inputs.voice_id_2!] }
 }
 
-async function generateAudioSegment(uuid: string, index: number, line: ScriptItem, voiceId: string) {
+async function generateAudioSegment(uuid: string, index: number, total: number, line: ScriptItem, voiceId: string) {
   'use step'
   const task = await loadTask(uuid)
   const access = (task.userInputs as TaskUserInput).apiAccess || { llm: 'admin' as const, tts: 'admin' as const }
   const audio = await withApiContext({ userId: task.userId, access }, () => genVoiceMinimax(line.text, { id: voiceId }))
   const filename = `tmp-${uuid}-${index}.mp3`
   await storeAudio(filename, audio.audio)
+  await updateProgress(task.id, 'audio', index + 1, total)
   return filename
 }
 
 async function finalizeAudio(uuid: string, files: string[], script: ScriptItem[]) {
   'use step'
-  const parts = await Promise.all(files.map(readAudio))
   const task = await loadTask(uuid)
+  await updateProgress(task.id, 'finalizing')
+  const parts = await Promise.all(files.map(readAudio))
   const scriptResult = taskGetStepItem(task, PodcastStep.Audio).input as LongTextResult
   const result = await finalizeMp3(parts, script, scriptResult?.title || 'ToCast 播客')
   const location = await storeAudio(`${uuid}.mp3`, result.audio)
@@ -76,7 +89,8 @@ async function finalizeAudio(uuid: string, files: string[], script: ScriptItem[]
     output: { location, duration: result.duration, timedScript: result.timedScript },
   })
   await getDb().update(tasksTable).set({
-    stepsDetail: task.stepsDetail, status: TaskStatus.Success, updatedAt: new Date(),
+    stepsDetail: task.stepsDetail, status: TaskStatus.Success, currentStep: 'complete',
+    statusAt: new Date(), updatedAt: new Date(),
   }).where(eq(tasksTable.id, task.id))
   await removeAudio(files).catch(error => console.warn('Temporary audio cleanup failed', error))
 }
@@ -89,7 +103,8 @@ async function cleanTemporaryAudio(uuid: string, count: number) {
 async function markFailed(uuid: string, reason: string) {
   'use step'
   await getDb().update(tasksTable).set({
-    status: TaskStatus.Failed, statusReason: { msg: reason.slice(0, 300) }, updatedAt: new Date(),
+    status: TaskStatus.Failed, currentStep: 'failed', statusAt: new Date(),
+    statusReason: { msg: reason.slice(0, 300) }, updatedAt: new Date(),
   }).where(eq(tasksTable.uuid, uuid))
 }
 
@@ -103,7 +118,7 @@ export async function generatePodcastWorkflow(uuid: string) {
     segmentCount = plan.script.length
     const files: string[] = []
     for (let index = 0; index < plan.script.length; index++) {
-      files.push(await generateAudioSegment(uuid, index, plan.script[index], plan.voiceIds[index % 2]))
+      files.push(await generateAudioSegment(uuid, index, plan.script.length, plan.script[index], plan.voiceIds[index % 2]))
     }
     await finalizeAudio(uuid, files, plan.script)
   } catch (error) {

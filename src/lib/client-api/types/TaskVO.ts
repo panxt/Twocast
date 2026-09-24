@@ -20,6 +20,7 @@ export interface TaskVO {
   out_outputs?: any | null;
   out_id?: string | null;
   result?: any | null;
+  progress?: { stage: 'preparing' | 'script' | 'audio' | 'finalizing'; current?: number; total?: number } | null;
   status: TaskStatus;
   status_human: string;
   status_reason?: any | null;
