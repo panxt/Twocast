@@ -43,12 +43,11 @@ export function TcSelector({value, onChange, options, title}: {title?: string, v
 
     return (
         <div className="relative flex-shrink-0" ref={containerRef}>
-          <button
-            onClick={() => setIsOpen(!isOpen)}
-            className="flex items-center gap-2 px-3 sm:px-4 py-3 sm:py-3 bg-gradient-to-r from-white/90 to-gray-50/80 dark:from-gray-700/90 dark:to-gray-800/80 backdrop-blur-sm rounded-lg sm:rounded-xl hover:scale-[1.02] transition-all duration-300 w-full sm:min-w-[120px] shadow-md relative overflow-hidden"
-            style={{
-              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.4)'
-            }}
+          <button type="button"
+              onClick={() => setIsOpen(!isOpen)}
+            aria-label={title}
+            aria-expanded={isOpen}
+            className="relative flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left dark:border-slate-700 dark:bg-slate-800 sm:min-w-[120px]"
           >
             <div className="absolute inset-0 bg-gradient-to-br from-white/30 to-transparent pointer-events-none rounded-lg sm:rounded-xl"></div>
             <span className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-200 relative z-10">{options.find(option => option.id === value)?.label}</span>
@@ -57,10 +56,7 @@ export function TcSelector({value, onChange, options, title}: {title?: string, v
           
           {isOpen && (
             <div 
-              className="absolute top-full mt-1 left-0 right-0 sm:right-auto bg-gradient-to-br from-white/95 to-gray-50/90 dark:from-gray-700/95 dark:to-gray-800/90 backdrop-blur-xl rounded-lg sm:rounded-xl shadow-lg z-50 min-w-full overflow-hidden sm:min-w-48"
-              style={{
-                boxShadow: '0 8px 25px rgba(0, 0, 0, 0.12)'
-              }}
+              className="absolute left-0 right-0 top-full z-50 mt-1 min-w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800 sm:right-auto sm:min-w-48"
             >
               <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-transparent pointer-events-none rounded-lg sm:rounded-xl"></div>
               
@@ -78,7 +74,7 @@ export function TcSelector({value, onChange, options, title}: {title?: string, v
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search..."
+                    placeholder="搜索选项…"
                     className="w-full px-8 py-1.5 text-xs sm:text-sm bg-white/50 dark:bg-gray-800/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 border border-gray-100/50 dark:border-gray-700/50"
                   />
                   <MagnifyingGlassIcon className="w-4 h-4 text-gray-400 absolute left-2 top-1/2 -translate-y-1/2" />
@@ -116,7 +112,7 @@ export function TcSelector({value, onChange, options, title}: {title?: string, v
                   ))
                 ) : (
                   <div className="px-3 sm:px-4 py-3 text-xs sm:text-sm text-gray-500 dark:text-gray-400 text-center">
-                    No results found
+                    没有匹配选项
                   </div>
                 )}
               </div>

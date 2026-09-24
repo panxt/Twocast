@@ -13,6 +13,10 @@ import { useTranslation } from "react-i18next";
 import { VoicePlayerButton } from "./VoicePlayerButton";
 import { FaCoins } from "react-icons/fa";
 import { getPlatformDefaultVoices } from "@/lib/podcast/client_utils";
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import { getLocalePath } from '@/utils/locale-util';
+import type { LocaleTypes } from '@/i18n/settings';
 
 enum SelectType {
   Select = 'select',
@@ -25,6 +29,7 @@ interface UserInputProps {
 
 export function UserInput({ onSubmitSuccess }: UserInputProps) {
   const { t, i18n } = useTranslation('podcast');
+  const locale = (useParams()?.locale || 'zh') as LocaleTypes;
   const [topic, setTopic] = useState("");
   const [activeTab, setActiveTab] = useState(PodcastInputType.Topic);
   const [file, setFile] = useState<File | null>(null);
@@ -38,6 +43,7 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
   const [voiceOptions, setVoiceOptions] = useState([]);
   const [selectType, setSelectType] = useState(SelectType.Select);
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
+  const [apiWarning, setApiWarning] = useState('');
   const audioRefs = useRef<{ [key: string]: HTMLAudioElement | null }>({});
 
   // 监听 playingVoiceId 状态变化
@@ -98,6 +104,12 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
       setVoices(resp.data.data)
     }
     fetchVoices()
+  }, []);
+
+  useEffect(() => {
+    fetch('/api/user/settings').then(response => response.json()).then(data => {
+      setApiWarning(data.access?.llm?.error || data.access?.tts?.error || '');
+    }).catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -258,17 +270,14 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
         return (
           <div className="w-full">
             <div
-              className="relative border-0 rounded-xl sm:rounded-2xl p-6 sm:p-8 text-center cursor-pointer transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-indigo-50/80 to-purple-50/60 dark:from-indigo-900/40 dark:to-purple-900/30"
-              style={{
-                boxShadow: 'inset 0 4px 20px rgba(99, 102, 241, 0.1), 0 8px 32px rgba(99, 102, 241, 0.1)'
-              }}
+              className="relative rounded-xl border border-dashed border-indigo-300 bg-indigo-50/60 p-6 text-center dark:border-indigo-800 dark:bg-indigo-950/30 sm:p-8"
             >
               {/* 光泽效果 */}
               <div className="absolute inset-0 rounded-xl sm:rounded-2xl bg-gradient-to-br from-white/30 via-transparent to-transparent pointer-events-none"></div>
 
               <div className="relative z-10">
                 <div className="mb-3 sm:mb-4">
-                  <div className="w-12 h-12 sm:w-16 sm:h-16 mx-auto rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-xl sm:text-2xl shadow-lg">
+                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-100 text-xl dark:bg-indigo-900 sm:h-14 sm:w-14">
                     📁
                   </div>
                 </div>
@@ -284,9 +293,12 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
                   className="hidden"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
-                    console.log('file', file);
                     if (file) {
-                      setFile(file);
+                      if (file.size > 4_000_000) {
+                        toast.error('文件大小须在 4 MB 以内');
+                        e.target.value = '';
+                        setFile(null);
+                      } else setFile(file);
                     }
                   }}
                   id="file-upload"
@@ -294,29 +306,26 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
                 />
                 <label
                   htmlFor="file-upload"
-                  className={`inline-block mt-3 sm:mt-4 px-4 sm:px-6 py-2 sm:py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg sm:rounded-xl hover:from-indigo-600 hover:to-purple-700 cursor-pointer transition-all duration-300 font-medium shadow-md hover:shadow-lg hover:scale-[1.02] text-xs sm:text-sm ${inputDisabled ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}
+                  className={`mt-4 inline-block cursor-pointer rounded-lg bg-indigo-700 px-5 py-2.5 text-sm font-medium text-white hover:bg-indigo-800 ${inputDisabled ? 'pointer-events-none cursor-not-allowed opacity-50' : ''}`}
                 >
-                  Choose File
+                  选择文件
                 </label>
               </div>
             </div>
 
             {file && (
               <div
-                className="mt-3 sm:mt-4 p-3 sm:p-4 rounded-lg sm:rounded-xl bg-gradient-to-r from-emerald-50/80 to-teal-50/60 dark:from-emerald-900/30 dark:to-teal-900/20 relative overflow-hidden"
-                style={{
-                  boxShadow: 'inset 0 2px 10px rgba(16, 185, 129, 0.1), 0 4px 20px rgba(16, 185, 129, 0.05)'
-                }}
+                className="relative mt-3 overflow-hidden rounded-lg border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-800 dark:bg-emerald-950/30 sm:p-4"
               >
                 <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent pointer-events-none"></div>
                 <p className="text-xs text-emerald-700 dark:text-emerald-300 relative z-10 font-medium">
-                  File selected: {file?.name}
+                  已选择：{file?.name}
                 </p>
                 <button
                   type="button"
-                  onClick={() => setFile(null)}
+                  onClick={resetFile}
                   className="absolute top-2 right-2 z-20 text-gray-400 hover:text-red-500 bg-white/70 dark:bg-gray-800/70 rounded-full p-1 shadow transition-colors"
-                  title="Remove file"
+                  title="移除文件"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -345,7 +354,7 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
 
   return (
     <div
-      className="relative z-20 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl sm:rounded-3xl p-4 sm:p-6 lg:p-8 shadow-xl"
+      className="relative z-20 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-6 lg:p-8"
     >
       {/* 顶部光泽效果 */}
       <div className="absolute inset-0 rounded-2xl sm:rounded-3xl bg-gradient-to-br from-white/30 via-transparent to-transparent pointer-events-none"></div>
@@ -353,22 +362,16 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
       <div className="relative">
         {/* Tab Navigation */}
         <div
-          className="grid grid-cols-2 sm:flex gap-1 mb-5 sm:mb-6 bg-gradient-to-r from-gray-100/80 via-pink-50/60 to-gray-200/60 dark:from-gray-700/80 dark:via-pink-900/40 dark:to-gray-800/60 backdrop-blur-sm rounded-xl sm:rounded-2xl p-1 shadow-inner"
-          style={{
-            boxShadow: 'inset 0 2px 10px rgba(0, 0, 0, 0.1)'
-          }}
+          className="mb-6 grid grid-cols-2 gap-2 rounded-xl bg-slate-50 p-2 dark:bg-slate-800 sm:flex"
         >
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => handleTabChange(tab.id)}
-              className={`flex items-center gap-2 px-2 sm:px-4 py-2 sm:py-3 rounded-lg sm:rounded-xl transition-all duration-300 flex-1 justify-center relative overflow-hidden text-xs sm:text-sm ${activeTab === tab.id
-                ? "bg-gradient-to-r from-white via-pink-50 to-blue-50 dark:from-gray-600 dark:via-pink-900/40 dark:to-indigo-800 text-gray-900 dark:text-gray-100 shadow-md scale-[1.02]"
-                : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-white/50 dark:hover:bg-gray-600/50"
-                }`}
-              style={activeTab === tab.id ? {
-                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.6)'
-              } : {}}
+              aria-pressed={activeTab === tab.id}
+              className={`relative flex flex-1 items-center justify-center gap-2 rounded-lg border px-3 py-3 text-sm transition-colors ${activeTab === tab.id
+                ? "border-indigo-400 bg-white font-semibold text-indigo-800 shadow-sm dark:bg-indigo-950 dark:text-indigo-200"
+                : "border-transparent text-slate-600 hover:border-slate-200 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-700"}`}
               disabled={loading}
             >
               {activeTab === tab.id && (
@@ -387,6 +390,10 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
         <div className="mb-5 sm:mb-6">
           {renderInputSection()}
         </div>
+
+        {apiWarning && <div role="status" className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
+          {apiWarning} <Link href={getLocalePath(locale, '/settings')} className="font-semibold underline">查看 API 配置与授权</Link>
+        </div>}
 
         {/* Bottom Section with Speed Selector and Create Button */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
@@ -407,10 +414,7 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
           <button
             onClick={handleSubmit}
             disabled={!readyToSubmit || loading}
-            className="flex items-center justify-center gap-2 px-6 sm:px-8 py-2 sm:py-3 bg-gradient-to-r from-gray-900 via-pink-900 to-indigo-900 dark:from-white dark:via-pink-100 dark:to-indigo-100 text-white dark:text-gray-900 rounded-lg sm:rounded-xl hover:scale-[1.02] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 font-semibold shadow-lg relative overflow-hidden flex-1 sm:flex-initial"
-            style={{
-              boxShadow: '0 8px 20px rgba(0, 0, 0, 0.12)'
-            }}
+            className="relative flex flex-1 items-center justify-center gap-2 overflow-hidden rounded-xl bg-indigo-700 px-6 py-3 font-semibold text-white hover:bg-indigo-800 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-initial"
           >
             <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent pointer-events-none rounded-lg sm:rounded-xl"></div>
             {loading ? (
