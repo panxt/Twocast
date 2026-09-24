@@ -1,8 +1,9 @@
 import 'server-only'
 import { createCipheriv, createDecipheriv, randomBytes } from 'crypto'
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { getDb } from '@/db/db'
-import { appSettingsTable } from '@/db/schema'
+import { appSettingsTable, userApiSettingsTable } from '@/db/schema'
+import { currentApiContext } from './api-context'
 
 export const SETTING_KEYS = [
   'LLM_CHAT_URL', 'LLM_CHAT_MODEL', 'LLM_API_KEY',
@@ -18,14 +19,14 @@ function encryptionKey(): Buffer {
   return key
 }
 
-function encrypt(value: string): string {
+export function encrypt(value: string): string {
   const iv = randomBytes(12)
   const cipher = createCipheriv('aes-256-gcm', encryptionKey(), iv)
   const ciphertext = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()])
   return Buffer.concat([iv, cipher.getAuthTag(), ciphertext]).toString('base64')
 }
 
-function decrypt(value: string): string {
+export function decrypt(value: string): string {
   const bytes = Buffer.from(value, 'base64')
   const decipher = createDecipheriv('aes-256-gcm', encryptionKey(), bytes.subarray(0, 12))
   decipher.setAuthTag(bytes.subarray(12, 28))
@@ -40,4 +41,25 @@ export async function getSetting(key: SettingKey): Promise<string> {
 export async function setSetting(key: SettingKey, value: string) {
   await getDb().insert(appSettingsTable).values({ key, encryptedValue: encrypt(value), updatedAt: new Date() })
     .onConflictDoUpdate({ target: appSettingsTable.key, set: { encryptedValue: encrypt(value), updatedAt: new Date() } })
+}
+
+export async function getUserSetting(userId: number, key: SettingKey): Promise<string> {
+  const rows = await getDb().select().from(userApiSettingsTable).where(and(
+    eq(userApiSettingsTable.userId, userId), eq(userApiSettingsTable.key, key),
+  )).limit(1)
+  return rows[0] ? decrypt(rows[0].encryptedValue) : ''
+}
+
+export async function setUserSetting(userId: number, key: SettingKey, value: string) {
+  const encryptedValue = encrypt(value)
+  await getDb().insert(userApiSettingsTable).values({ userId, key, encryptedValue, updatedAt: new Date() })
+    .onConflictDoUpdate({ target: [userApiSettingsTable.userId, userApiSettingsTable.key],
+      set: { encryptedValue, updatedAt: new Date() } })
+}
+
+export async function getApiSetting(key: SettingKey): Promise<string> {
+  const context = currentApiContext()
+  const capability = key.startsWith('MINIMAX_') ? 'tts' : 'llm'
+  if (context?.access[capability] === 'own') return getUserSetting(context.userId, key)
+  return getSetting(key)
 }

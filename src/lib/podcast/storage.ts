@@ -3,6 +3,7 @@ import fs from 'fs/promises'
 import path from 'path'
 
 const BUCKET = 'podcast-audio'
+const UPLOAD_BUCKET = 'podcast-files'
 
 function storageConfig() {
   const url = process.env.SUPABASE_URL?.replace(/\/$/, '')
@@ -28,7 +29,24 @@ export async function storeAudio(filename: string, audio: Buffer): Promise<strin
   return `supabase:${filename}`
 }
 
-export async function getAudioUrl(location: string): Promise<string> {
+export async function storeUpload(filename: string, bytes: Buffer, contentType: string): Promise<string> {
+  if (process.env.NODE_ENV !== 'production' && !process.env.SUPABASE_URL) {
+    const dir = path.join(process.cwd(), 'private', 'uploads')
+    await fs.mkdir(dir, { recursive: true })
+    await fs.writeFile(path.join(dir, filename), bytes)
+    return `local-upload:${filename}`
+  }
+  const { url, key } = storageConfig()
+  const response = await fetch(`${url}/storage/v1/object/${UPLOAD_BUCKET}/${encodeURIComponent(filename)}`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${key}`, apikey: key, 'content-type': contentType },
+    body: new Uint8Array(bytes),
+  })
+  if (!response.ok) throw new Error(`File upload failed (${response.status})`)
+  return `supabase-upload:${filename}`
+}
+
+export async function getAudioUrl(location: string, downloadName?: string): Promise<string> {
   if (!location?.startsWith('supabase:')) return location
   const { url, key } = storageConfig()
   const filename = location.slice('supabase:'.length)
@@ -39,9 +57,13 @@ export async function getAudioUrl(location: string): Promise<string> {
   })
   if (!response.ok) throw new Error(`Audio URL signing failed (${response.status})`)
   const data = await response.json()
-  return data.signedURL.startsWith('http')
+  const signed = data.signedURL.startsWith('http')
     ? data.signedURL
     : new URL(`/storage/v1${data.signedURL}`, url).toString()
+  if (!downloadName) return signed
+  const downloadUrl = new URL(signed)
+  downloadUrl.searchParams.set('download', downloadName)
+  return downloadUrl.toString()
 }
 
 export async function readAudio(filename: string): Promise<Buffer> {
@@ -62,4 +84,39 @@ export async function removeAudio(files: string[]): Promise<void> {
     body: JSON.stringify({ prefixes: files }),
   })
   if (!response.ok) throw new Error(`Audio cleanup failed (${response.status})`)
+}
+
+export async function removeUpload(location: string): Promise<void> {
+  if (location.startsWith('local-upload:')) {
+    await fs.rm(path.join(process.cwd(), 'private', 'uploads', location.slice(13)), { force: true })
+    return
+  }
+  if (!location.startsWith('supabase-upload:')) return
+  const { url, key } = storageConfig()
+  const response = await fetch(`${url}/storage/v1/object/${UPLOAD_BUCKET}`, {
+    method: 'DELETE',
+    headers: { authorization: `Bearer ${key}`, apikey: key, 'content-type': 'application/json' },
+    body: JSON.stringify({ prefixes: [location.slice('supabase-upload:'.length)] }),
+  })
+  if (!response.ok) throw new Error(`File cleanup failed (${response.status})`)
+}
+
+export async function getUploadUrl(location: string, downloadName: string): Promise<string> {
+  if (!location.startsWith('supabase-upload:')) throw new Error('This upload is stored locally')
+  const { url, key } = storageConfig()
+  const filename = location.slice('supabase-upload:'.length)
+  const response = await fetch(`${url}/storage/v1/object/sign/${UPLOAD_BUCKET}/${encodeURIComponent(filename)}`, {
+    method: 'POST', headers: { authorization: `Bearer ${key}`, apikey: key, 'content-type': 'application/json' },
+    body: JSON.stringify({ expiresIn: 60 * 60 }),
+  })
+  if (!response.ok) throw new Error(`File signing failed (${response.status})`)
+  const data = await response.json()
+  const signed = new URL(data.signedURL.startsWith('http') ? data.signedURL : `/storage/v1${data.signedURL}`, url)
+  signed.searchParams.set('download', downloadName.replace(/[\\/:*?"<>|\r\n]/g, ' ').slice(0, 100))
+  return signed.toString()
+}
+
+export async function readLocalUpload(location: string): Promise<Buffer> {
+  if (!location.startsWith('local-upload:')) throw new Error('Not a local upload')
+  return fs.readFile(path.join(process.cwd(), 'private', 'uploads', location.slice('local-upload:'.length)))
 }

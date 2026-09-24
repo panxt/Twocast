@@ -7,6 +7,10 @@ export interface TaskVO {
   kami_id?: number | null;
   user_id: number;
   user_email: string;
+  owner_name?: string;
+  folder_path?: string;
+  labels?: string[];
+  error?: string | null;
   action?: string | null;
   llm_name?: string | null;
   llm_params?: any | null;

@@ -2,7 +2,7 @@
 
 import { apiRequest } from "@/lib/client-api/base";
 import { Platform, PodcastInputType } from "@/lib/podcast/types";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { toast } from "sonner";
 import { OptionItem, TcSelector } from "./TcSelector";
 import { languages as minimaxLng } from "@/lib/podcast/languages/minimax";
@@ -48,7 +48,7 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
   const tabs = [
     { id: PodcastInputType.Topic, label: t('tabs.topic'), icon: "🧠" },
     { id: PodcastInputType.Link, label: t('tabs.link'), icon: "🔗" },
-    ...(process.env.NEXT_PUBLIC_VERCEL_BETA === '1' ? [] : [{ id: PodcastInputType.File, label: t('tabs.upload_file'), icon: "📁" }]),
+    { id: PodcastInputType.File, label: t('tabs.upload_file'), icon: "📁" },
     { id: PodcastInputType.LongText, label: t('tabs.long_text'), icon: "📄" },
     ...(process.env.NEXT_PUBLIC_VERCEL_BETA === '1' ? [] : [{ id: PodcastInputType.FrontPage, label: t('tabs.front_page'), icon: "🌐" }]),
   ];
@@ -80,7 +80,7 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
     [Platform.FishAudio]: lngOpt2OptionItem(fishAudioLng),
     [Platform.FishAudio + '_custom']: lngOpt2OptionItem(fishAudioLng),
   }
-  const platformDefaultVoices = getPlatformDefaultVoices(i18n.language)
+  const platformDefaultVoices = useMemo(() => getPlatformDefaultVoices(i18n.language), [i18n.language])
 
   const platformTips = {
     [Platform.Minimax]: 'https://platform.minimaxi.com/examination-center/voice-experience-center/t2a_v2',
@@ -140,7 +140,7 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
         setVoiceId_2(platformDefaultVoices[platform as Platform].voiceId_2)
       }
     }
-  }, [platform, voices, playingVoiceId])
+  }, [platform, voices, playingVoiceId, platformDefaultVoices])
 
   useEffect(() => {
     const isReadyToSubmit = () => {
@@ -193,18 +193,20 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
       } else {
         formData.append("text", topic);
       }
-      await apiRequest({
+      const response = await apiRequest({
         url: "/api/protected/gen-podcast",
         method: "POST",
         data: formData,
       });
-      toast.success("Task submitted successfully");
+      if (response.data?.code !== 0) throw new Error(response.data?.message || '提交失败');
+      toast.success("任务已提交");
       setTopic("");
       resetFile();
       // setActiveTab(PodcastInputType.Topic);
       onSubmitSuccess?.();
     } catch (error) {
       console.error(error);
+      if (error instanceof Error && !('response' in error)) toast.error(error.message);
     } finally {
       setLoading(false);
     }
@@ -274,11 +276,11 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
                   {t('placeholder.upload_file')}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {t('placeholder.upload_file_tips')}
+                  支持 PDF、TXT、Markdown，最大 4 MB；扫描版 PDF 暂不支持文字识别
                 </p>
                 <input
                   type="file"
-                  accept=".pdf,.doc,.docx,.txt"
+                  accept=".pdf,.txt,.md,.text"
                   className="hidden"
                   onChange={(e) => {
                     const file = e.target.files?.[0];

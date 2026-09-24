@@ -17,7 +17,7 @@ function id3Frame(name: string, body: Buffer): Buffer {
 
 // ID3v2.4 USLT makes the full script readable in music apps; SYLT adds
 // timestamps for apps that support synchronized lyrics.
-export function embedScript(mp3: Buffer, lines: TimedScriptItem[], durationSeconds: number): Buffer {
+export function embedScript(mp3: Buffer, lines: TimedScriptItem[], durationSeconds: number, title = 'ToCast 播客'): Buffer {
   const fullText = lines.map(line => `${line.role}: ${line.text}`).join('\n')
   const uslt = Buffer.concat([Buffer.from([3]), Buffer.from('zho\0', 'ascii'), Buffer.from(fullText, 'utf8')])
   const syltHeader = Buffer.concat([Buffer.from([3]), Buffer.from('zho', 'ascii'), Buffer.from([2, 1, 0])])
@@ -28,6 +28,9 @@ export function embedScript(mp3: Buffer, lines: TimedScriptItem[], durationSecon
   })
   const tlen = Buffer.from(`\x03${Math.round(durationSeconds * 1000)}`, 'utf8')
   const frames = Buffer.concat([
+    id3Frame('TIT2', Buffer.from(`\x03${title}`, 'utf8')),
+    id3Frame('TPE1', Buffer.from('\x03ToCast', 'utf8')),
+    id3Frame('TALB', Buffer.from('\x03ToCast 播客', 'utf8')),
     id3Frame('USLT', uslt), id3Frame('SYLT', Buffer.concat([syltHeader, ...syltLines])),
     id3Frame('TLEN', tlen),
   ])
@@ -64,7 +67,7 @@ async function probeDuration(binary: string, filename: string): Promise<number> 
   })
 }
 
-export async function finalizeMp3(parts: Buffer[], script: ScriptItem[]) {
+export async function finalizeMp3(parts: Buffer[], script: ScriptItem[], title?: string) {
   if (!parts.length || parts.length !== script.length) throw new Error('Audio/script segment mismatch')
   const dir = await mkdtemp(path.join(tmpdir(), 'twocast-audio-'))
   try {
@@ -96,8 +99,20 @@ export async function finalizeMp3(parts: Buffer[], script: ScriptItem[]) {
       startSeconds += segmentDurations[index]
       return item
     })
-    return { audio: embedScript(normalized, timedScript, duration), duration, timedScript }
+    return { audio: embedScript(normalized, timedScript, duration, title), duration, timedScript }
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
+}
+
+// Re-encode a legacy concatenated MP3 before replacing its metadata. A TLEN
+// tag alone cannot repair players that stop at the first segment's Xing header.
+export async function normalizeExistingMp3(audio: Buffer, lines: TimedScriptItem[], previousDuration: number, title: string) {
+  const normalized = await finalizeMp3([audio], [{ role: '', text: '' }], title)
+  const bytes = normalized.audio
+  const tagSize = ((bytes[6] & 127) << 21) | ((bytes[7] & 127) << 14) | ((bytes[8] & 127) << 7) | (bytes[9] & 127)
+  const rawAudio = bytes.subarray(10 + tagSize)
+  const ratio = previousDuration > 0 ? normalized.duration / previousDuration : 1
+  const timedScript = lines.map(line => ({ ...line, startMs: Math.round(line.startMs * ratio) }))
+  return { audio: embedScript(rawAudio, timedScript, normalized.duration, title), duration: normalized.duration, timedScript }
 }

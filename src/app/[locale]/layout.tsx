@@ -5,7 +5,6 @@ import siteMetadata from "@/data/siteMetadata";
 import { Metadata } from "next";
 import { dir } from "i18next";
 import { locales, LocaleTypes } from "@/i18n/settings";
-import { createTranslation } from "@/i18n/server";
 import Body from "../../templates/humanizeai-pro/Body";
 
 export async function generateStaticParams() {
@@ -14,19 +13,18 @@ export async function generateStaticParams() {
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: LocaleTypes }> }): Promise<Metadata> {
   const { locale } = await params
-  const { t } = await createTranslation(locale, "home");
   return {
     metadataBase: new URL(siteMetadata.siteUrl),
     title: {
-      default: t("metadata.title", { name: t("metadata.name") }),
-      template: `%s | ${t("metadata.title", { name: t("metadata.name") })}`
+      default: siteMetadata.title,
+      template: `%s | ${siteMetadata.title}`
     },
-    description: t("metadata.description", { name: t("metadata.name") }),
+    description: siteMetadata.description,
     openGraph: {
-      title: t("metadata.title", { name: t("metadata.name") }),
-      description: t("metadata.description", { name: t("metadata.name") }),
+      title: siteMetadata.title,
+      description: siteMetadata.description,
       url: "./",
-      siteName: t("metadata.title", { name: t("metadata.name") }),
+      siteName: siteMetadata.title,
       images: [siteMetadata.socialBanner],
       locale: locale,
       type: "website"
@@ -49,8 +47,8 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: L
       }
     },
     twitter: {
-      title: t("metadata.title", { name: t("metadata.name") }),
-      description: t("metadata.description", { name: t("metadata.name") }),
+      title: siteMetadata.title,
+      description: siteMetadata.description,
       site: siteMetadata.siteUrl,
       creator: siteMetadata.author,
       card: "summary_large_image",

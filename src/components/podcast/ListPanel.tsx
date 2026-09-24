@@ -1,213 +1,162 @@
-'use client';
+'use client'
 
-import { useEffect, useState, useRef, useContext } from 'react';
-import { PlayIcon, PauseIcon } from '@heroicons/react/24/solid';
-import { ClockIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline';
-import { TaskVO } from '@/lib/client-api/types/TaskVO';
-import { apiRequest } from '@/lib/client-api/base';
-import { toast } from 'sonner';
-import { TaskStatus } from '@/types/task';
-import { getLocalePath } from '@/utils/locale-util';
-import { useTranslation } from 'react-i18next';
-import Link from 'next/link';
-import { AppContext } from '@/contexts/AppContext';
-import { formatDuration } from '@/utils/time'
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { toast } from 'sonner'
+import { useTranslation } from 'react-i18next'
 import { useAudioPlayer } from '@/contexts/AudioPlayerContext'
+import { TaskVO } from '@/lib/client-api/types/TaskVO'
+import { TaskStatus } from '@/types/task'
+import { getLocalePath } from '@/utils/locale-util'
+import { formatDuration } from '@/utils/time'
 
-interface ListPanelProps {
-  refreshTrigger?: number;
-  apiUrl: string;
-  showPagination?: boolean;
-}
+interface ListPanelProps { refreshTrigger?: number; apiUrl: string; showPagination?: boolean }
+const titleOf = (task: TaskVO) => task.result?.title || task.user_inputs?.fileName || task.user_inputs?.text?.slice(0, 48) || '未命名播客'
 
 export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: ListPanelProps) {
-  const { user } = useContext(AppContext);
-  const { play, pause, isPlaying, currentTrack } = useAudioPlayer();
-  const [podcasts, setPodcasts] = useState<TaskVO[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [page, setPage] = useState(1);
-  const [pageSize] = useState(10);
-  const [totalPages, setTotalPages] = useState(1);
-  const { i18n } = useTranslation();
-  const locale = i18n.language;
-
-  const handlePlay = (podcast: TaskVO) => {
-    if (podcast.status !== TaskStatus.Success || !podcast.result?.audio_url) {
-      toast.error('音频尚未准备好');
-      return;
-    }
-
-    if (isPlaying && currentTrack?.id === podcast.uuid) {
-      pause();
-    } else {
-      play({
-        id: podcast.uuid,
-        url: podcast.result.audio_url,
-        title: podcast.result.title || podcast.user_inputs?.topic || 'Untitled Podcast',
-        // artist: 'Your Artist', // 如果有作者信息可以添加
-        // thumbnail: 'your_thumbnail_url', // 如果有封面可以添加
-        duration: podcast.result.duration
-      });
-    }
-  };
-
-  // Cleanup audio when component unmounts
-  useEffect(() => {
-    return () => {
-      // No need to manually pause, global player handles its lifecycle
-    };
-  }, []);
+  const { i18n } = useTranslation()
+  const { play, pause, isPlaying, currentTrack } = useAudioPlayer()
+  const [items, setItems] = useState<TaskVO[]>([])
+  const [page, setPage] = useState(1)
+  const [pages, setPages] = useState(1)
+  const [total, setTotal] = useState(0)
+  const [status, setStatus] = useState('all')
+  const [search, setSearch] = useState('')
+  const [query, setQuery] = useState('')
+  const [folder, setFolder] = useState('')
+  const [scope, setScope] = useState('mine')
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [editing, setEditing] = useState<string | null>(null)
+  const [folderDraft, setFolderDraft] = useState('/')
+  const [labelsDraft, setLabelsDraft] = useState('')
+  const [busy, setBusy] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [revision, setRevision] = useState(0)
 
   useEffect(() => {
-    const fetchPodcasts = async () => {
-      if (process.env.NEXT_PUBLIC_CLERK_ENABLED && !user) {
-        setLoading(false);
-        return;
-      }
+    fetch('/api/auth/me').then(response => response.json()).then(data => {
+      setIsAdmin(Boolean(data.isAdmin))
+      if (data.isAdmin) setScope('all')
+    }).catch(() => undefined)
+  }, [])
+  useEffect(() => {
+    const timer = setTimeout(() => { setPage(1); setQuery(search) }, 300)
+    return () => clearTimeout(timer)
+  }, [search])
+  useEffect(() => {
+    let alive = true
+    const params = new URLSearchParams({ page: String(page), page_size: '15', status, search: query, scope, folder })
+    fetch(`${apiUrl}?${params}`, { cache: 'no-store' }).then(async response => {
+      if (!response.ok) throw new Error('列表加载失败')
+      return response.json()
+    }).then(body => {
+      if (!alive) return
+      setItems(body.data.items)
+      setPages(Math.max(1, body.data.pagination.totalPages))
+      setTotal(body.data.pagination.total)
+    }).catch(error => { if (alive) toast.error(error.message) }).finally(() => { if (alive) setLoading(false) })
+    return () => { alive = false }
+  }, [apiUrl, page, status, query, scope, folder, refreshTrigger, revision])
+  useEffect(() => {
+    if (!items.some(item => item.status === TaskStatus.Pending || item.status === TaskStatus.Processing)) return
+    const timer = setTimeout(() => setRevision(value => value + 1), 5000)
+    return () => clearTimeout(timer)
+  }, [items])
 
-      try {
-        const response = await apiRequest({
-          url: `${apiUrl}?page=${page}&page_size=${pageSize}`,
-          method: 'GET',
-        });
-        setPodcasts(response.data.data.items);
-        setTotalPages(response.data.data.pagination.totalPages);
-
-        // Check if there are any pending tasks
-        const hasPendingTasks = response.data.data.items.some(
-          (task: TaskVO) => task.status === 'pending'
-        );
-
-        // If there are pending tasks, set up a refresh after 5 seconds
-        if (hasPendingTasks) {
-          const timeoutId = setTimeout(() => {
-            fetchPodcasts();
-          }, 5000);
-        }
-      } catch (error) {
-        console.error('Failed to fetch podcasts:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    const timer = setTimeout(() => {
-      setLoading(true);
-      fetchPodcasts();
-    }, 1000);
-    return () => clearTimeout(timer);
-  }, [page, pageSize, refreshTrigger, user]);
-
-  const getStatusIcon = (status: TaskStatus, podcast: TaskVO) => {
-    switch (status) {
-      case TaskStatus.Success:
-        return (
-          <div className="flex-shrink-0 w-16 h-16 bg-gradient-to-br from-indigo-500/90 to-purple-500/90 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handlePlay(podcast);
-              }}
-              className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center hover:bg-white/30 transition-colors"
-            >
-              {isPlaying && currentTrack?.id === podcast.uuid ? (
-                <PauseIcon className="w-6 h-6 text-white" />
-              ) : (
-                <PlayIcon className="w-6 h-6 text-white" />
-              )}
-            </button>
-          </div>
-        );
-      case TaskStatus.Pending:
-      case TaskStatus.Processing:
-        return (
-          <div className="flex-shrink-0 w-16 h-16 bg-gradient-to-br from-yellow-500/90 to-orange-500/90 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-            <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
-              <ClockIcon className="w-6 h-6 text-white animate-pulse" />
-            </div>
-          </div>
-        );
-      case TaskStatus.Failed:
-        return (
-          <div className="flex-shrink-0 w-16 h-16 bg-gradient-to-br from-red-500/90 to-pink-500/90 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-            <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
-              <ExclamationCircleIcon className="w-6 h-6 text-white" />
-            </div>
-          </div>
-        );
-      default:
-        return null;
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[200px]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500"></div>
-      </div>
-    );
+  async function remove(task: TaskVO) {
+    if (!window.confirm(`确定删除「${titleOf(task)}」？关联的音频和上传文件也会删除。`)) return
+    setBusy(task.uuid)
+    try {
+      const response = await fetch(`/api/protected/tasks/${task.uuid}`, { method: 'DELETE' })
+      const body = await response.json()
+      if (!response.ok) throw new Error(body.error || '删除失败')
+      toast.success('已删除')
+      setRevision(value => value + 1)
+    } catch (error) { toast.error(error instanceof Error ? error.message : '删除失败') }
+    finally { setBusy(null) }
+  }
+  async function saveOrganization(uuid: string) {
+    setBusy(uuid)
+    try {
+      const response = await fetch(`/api/protected/tasks/${uuid}`, {
+        method: 'PATCH', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ folderPath: folderDraft, labels: labelsDraft.split(',').map(label => label.trim()).filter(Boolean) }),
+      })
+      const body = await response.json()
+      if (!response.ok) throw new Error(body.error || '保存失败')
+      setEditing(null)
+      setRevision(value => value + 1)
+      toast.success('分类已保存')
+    } catch (error) { toast.error(error instanceof Error ? error.message : '保存失败') }
+    finally { setBusy(null) }
+  }
+  function togglePlay(task: TaskVO) {
+    if (!task.result?.audio_url) return
+    if (isPlaying && currentTrack?.id === task.uuid) pause()
+    else play({ id: task.uuid, url: task.result.audio_url, title: titleOf(task), duration: task.result.duration })
   }
 
-  return (
-    <div className="flex flex-col gap-4 md:grid md:grid-cols-2 md:gap-4 md:max-w-6xl md:mx-auto relative">
-      {podcasts.map((podcast) => (
-        <div
-          key={podcast.uuid}
-          className="group relative flex gap-4 p-4 bg-gradient-to-r from-white/90 to-gray-50/80 dark:from-gray-700/90 dark:to-gray-800/80 backdrop-blur-sm rounded-3xl hover:scale-[1.02] transition-all duration-300"
-          style={{
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.4)'
-          }}
-        >
-          {/* Left side - Status Icon (独立的，不受Link影响) */}
-          {getStatusIcon(podcast.status, podcast)}
-
-          {/* Right side - Content (可点击跳转) */}
-          <Link
-            href={getLocalePath(locale, `/podcast/${podcast.uuid}`)}
-            className="flex-1 min-w-0 cursor-pointer"
-          >
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1 truncate">
-              {podcast.result?.title || podcast.user_inputs?.topic || 'Untitled Podcast'}
-            </h3>
-            <div className="mt-2 flex items-center gap-2 flex-wrap">
-              <span className="px-2 py-1 text-xs font-medium bg-gradient-to-r from-indigo-50/80 to-purple-50/60 dark:from-indigo-900/40 dark:to-purple-900/30 rounded-lg text-indigo-600 dark:text-indigo-300">
-                {podcast.status_human}
-              </span>
-              <span className="text-xs text-gray-500 dark:text-gray-400">
-                {new Date(podcast.created_at || '').toLocaleDateString()}
-              </span>
-              {/* 显示音频时长 */}
-              {podcast.result?.duration && (
-                <span className="px-2 py-1 text-xs font-medium bg-gradient-to-r from-emerald-50/80 to-teal-50/60 dark:from-emerald-900/40 dark:to-teal-900/30 rounded-lg text-emerald-600 dark:text-emerald-300">
-                  {formatDuration(podcast.result.duration)}
-                </span>
-              )}
-            </div>
-          </Link>
-        </div>
-      ))}
-
-      {/* Pagination Controls */}
-      {showPagination && podcasts.length > 0 && <div className="col-span-1 md:col-span-2 flex justify-center items-center gap-4 mt-8">
-        <button
-          onClick={() => setPage(p => Math.max(1, p - 1))}
-          disabled={page === 1}
-          className="px-4 py-2 bg-gradient-to-r from-indigo-500/90 to-purple-500/90 text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105 transition-all duration-300"
-        >
-          Previous
-        </button>
-        <span className="text-gray-600 dark:text-gray-400">
-          Page {page} of {totalPages}
-        </span>
-        <button
-          onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-          disabled={page === totalPages}
-          className="px-4 py-2 bg-gradient-to-r from-indigo-500/90 to-purple-500/90 text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105 transition-all duration-300"
-        >
-          Next
-        </button>
-      </div>
-      }
+  const folders = Array.from(new Set(items.map(item => item.folder_path || '/'))).sort()
+  return <section className="rounded-2xl border border-gray-200 bg-white/90 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900/80 sm:p-6">
+    <div className="flex flex-wrap items-end justify-between gap-4">
+      <div><h2 className="text-xl font-semibold text-gray-900 dark:text-white">音频与文件</h2>
+        <p className="mt-1 text-sm text-gray-500">共 {total} 条 · 可查看、分类和清理生成记录</p></div>
+      {isAdmin && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={scope === 'all'}
+        onChange={event => { setScope(event.target.checked ? 'all' : 'mine'); setPage(1) }} />查看所有用户</label>}
     </div>
-  );
+    <div className="mt-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem_10rem]">
+      <input aria-label="搜索音频" placeholder="搜索标题、原文件名或任务编号" value={search}
+        onChange={event => setSearch(event.target.value)} className="rounded-lg border px-3 py-2 text-sm dark:bg-gray-800" />
+      <select aria-label="按状态筛选" value={status} onChange={event => { setStatus(event.target.value); setPage(1) }}
+        className="rounded-lg border px-3 py-2 text-sm dark:bg-gray-800">
+        <option value="all">全部状态</option><option value="success">已完成</option>
+        <option value="failed">失败</option><option value="pending">等待中</option><option value="processing">生成中</option>
+      </select>
+      <div>
+        <input aria-label="按目录筛选" list="podcast-folder-suggestions" placeholder="目录，如 /资料/" value={folder}
+          onChange={event => { setFolder(event.target.value); setPage(1) }}
+          className="w-full rounded-lg border px-3 py-2 text-sm dark:bg-gray-800" />
+        <datalist id="podcast-folder-suggestions">{folders.map(path => <option key={path} value={path} />)}</datalist>
+      </div>
+    </div>
+    <div className="mt-5 divide-y divide-gray-200 dark:divide-gray-700">
+      {loading && <p className="py-10 text-center text-sm text-gray-500">正在加载…</p>}
+      {!loading && items.length === 0 && <p className="py-10 text-center text-sm text-gray-500">没有匹配的记录</p>}
+      {items.map(task => <div key={task.uuid} className="py-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <button onClick={() => togglePlay(task)} disabled={!task.result?.audio_url}
+            aria-label={isPlaying && currentTrack?.id === task.uuid ? '暂停' : '播放'}
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-indigo-600 text-white disabled:bg-gray-300">
+            {isPlaying && currentTrack?.id === task.uuid ? 'Ⅱ' : '▶'}</button>
+          <div className="min-w-0 flex-1">
+            <Link href={getLocalePath(i18n.language, `/podcast/${task.uuid}`)}
+              className="block truncate font-medium text-gray-900 hover:text-indigo-600 dark:text-white">{titleOf(task)}</Link>
+            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
+              <span>{task.owner_name || '用户'}</span><span>{task.folder_path || '/'}</span>
+              <span>{task.created_at ? new Date(task.created_at).toLocaleString() : ''}</span>
+              {task.result?.duration && <span>{formatDuration(task.result.duration)}</span>}
+              {task.user_inputs?.fileName && <a href={`/api/protected/tasks/${task.uuid}/file`}
+                className="text-indigo-600 hover:underline" onClick={event => event.stopPropagation()}>原文件：{task.user_inputs.fileName}</a>}
+            </div>
+          </div>
+          <span className={`rounded-full px-2 py-1 text-xs ${task.status === TaskStatus.Failed ? 'bg-red-100 text-red-700' : task.status === TaskStatus.Success ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{task.status_human}</span>
+          <button onClick={() => { setEditing(editing === task.uuid ? null : task.uuid); setFolderDraft(task.folder_path || '/'); setLabelsDraft((task.labels || []).join(', ')) }} className="rounded-lg border px-3 py-1.5 text-sm">分类</button>
+          <button onClick={() => remove(task)} disabled={busy === task.uuid || task.status === TaskStatus.Pending || task.status === TaskStatus.Processing}
+            className="rounded-lg border border-red-200 px-3 py-1.5 text-sm text-red-700 disabled:opacity-40">删除</button>
+        </div>
+        {(task.labels?.length || 0) > 0 && <div className="ml-14 mt-2 flex flex-wrap gap-1">{task.labels?.map(label => <span key={label} className="rounded bg-gray-100 px-2 py-0.5 text-xs dark:bg-gray-700">{label}</span>)}</div>}
+        {task.status === TaskStatus.Failed && task.error && <p className="ml-14 mt-2 text-xs text-red-600">{task.error}</p>}
+        {editing === task.uuid && <div className="ml-14 mt-3 grid gap-2 rounded-lg bg-gray-50 p-3 dark:bg-gray-800 sm:grid-cols-[1fr_1fr_auto]">
+          <input aria-label="目录路径" value={folderDraft} onChange={event => setFolderDraft(event.target.value)} placeholder="/资料/科技/" className="rounded border px-2 py-1 text-sm dark:bg-gray-900" />
+          <input aria-label="标签" value={labelsDraft} onChange={event => setLabelsDraft(event.target.value)} placeholder="标签，用逗号分隔" className="rounded border px-2 py-1 text-sm dark:bg-gray-900" />
+          <button onClick={() => saveOrganization(task.uuid)} disabled={busy === task.uuid} className="rounded bg-indigo-600 px-3 py-1 text-sm text-white">保存</button>
+        </div>}
+      </div>)}
+    </div>
+    {showPagination && <div className="mt-5 flex items-center justify-end gap-3 text-sm">
+      <button onClick={() => setPage(value => Math.max(1, value - 1))} disabled={page <= 1} className="rounded border px-3 py-1 disabled:opacity-40">上一页</button>
+      <span>{page} / {pages}</span>
+      <button onClick={() => setPage(value => Math.min(pages, value + 1))} disabled={page >= pages} className="rounded border px-3 py-1 disabled:opacity-40">下一页</button>
+    </div>}
+  </section>
 }

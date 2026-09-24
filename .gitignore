@@ -54,3 +54,4 @@ yarn-error.log*
 .contentlayer
 /.swc
 /supabase/.temp/
+private/uploads/

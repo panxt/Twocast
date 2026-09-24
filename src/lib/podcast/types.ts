@@ -26,6 +26,9 @@ export type TaskUserInput = {
   voice_id_1?: string
   voice_id_2?: string
   language?: string
+  fileName?: string
+  fileLocation?: string
+  apiAccess?: { llm: 'own' | 'grant' | 'admin'; tts: 'own' | 'grant' | 'admin' }
 }
 
 export enum PodcastStep {
