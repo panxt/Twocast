@@ -1,6 +1,6 @@
-import { eq } from 'drizzle-orm'
+import { and, eq, inArray, sql } from 'drizzle-orm'
 import { getDb } from '@/db/db'
-import { tasksTable } from '@/db/schema'
+import { apiGrantsTable, tasksTable } from '@/db/schema'
 import { getTaskByUuid } from '@/models/task'
 import { PodcastInputType, TaskUserInput } from './types'
 import { processTopicTask } from '@/queue/topic_queue'
@@ -102,10 +102,23 @@ async function cleanTemporaryAudio(uuid: string, count: number) {
 
 async function markFailed(uuid: string, reason: string) {
   'use step'
-  await getDb().update(tasksTable).set({
-    status: TaskStatus.Failed, currentStep: 'failed', statusAt: new Date(),
-    statusReason: { msg: reason.slice(0, 300) }, updatedAt: new Date(),
-  }).where(eq(tasksTable.uuid, uuid))
+  await getDb().transaction(async tx => {
+    // A retry must not return the same reserved grant twice.
+    const [failed] = await tx.update(tasksTable).set({
+      status: TaskStatus.Failed, currentStep: 'failed', statusAt: new Date(),
+      statusReason: { msg: reason.slice(0, 300) }, updatedAt: new Date(),
+    }).where(and(eq(tasksTable.uuid, uuid),
+      inArray(tasksTable.status, [TaskStatus.Pending, TaskStatus.Processing])))
+      .returning({ userInputs: tasksTable.userInputs })
+    if (!failed) return
+    const grantIds = (failed.userInputs as TaskUserInput | null)?.reservedGrantIds || []
+    for (const id of new Set(grantIds)) {
+      if (!Number.isInteger(id) || id < 1) continue
+      await tx.update(apiGrantsTable)
+        .set({ usedEpisodes: sql`GREATEST(0, ${apiGrantsTable.usedEpisodes} - 1)` })
+        .where(eq(apiGrantsTable.id, id))
+    }
+  })
 }
 
 export async function generatePodcastWorkflow(uuid: string) {
