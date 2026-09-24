@@ -15,10 +15,7 @@ export function CustomTextarea({ value, onChange, placeholder, rows = 3, disable
                 onChange={(e) => onChange(e.target.value)}
                 placeholder={placeholder}
                 rows={rows}
-                className="w-full px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base bg-gradient-to-br from-white/90 to-white/60 dark:from-gray-800/90 dark:to-gray-900/60 backdrop-blur-sm border-0 rounded-lg sm:rounded-xl focus:outline-none focus:ring-0 text-gray-800 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 resize-y min-h-[80px] shadow-inner"
-                style={{
-                    boxShadow: 'inset 0 2px 10px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.3)'
-                }}
+                className="min-h-[100px] w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                 disabled={disabled}
             />
             {/* 光泽效果覆盖层 */}
