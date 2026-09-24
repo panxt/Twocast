@@ -1,4 +1,4 @@
-import { TimedScriptItem } from './finalize_mp3'
+import type { TimedScriptItem } from './finalize_mp3'
 
 export function toLrc(lines: TimedScriptItem[], title: string): string {
   const safeTitle = title.replace(/[\r\n[\]]/g, ' ').trim()
