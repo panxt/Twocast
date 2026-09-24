@@ -129,7 +129,7 @@ export default function PodcastPlayer({ audioUrl, downloadUrl, title, artist, th
           {t('click_play_button_to_start_listening')}
         </p>
         {lyricsUrl && <p className="text-center text-xs text-gray-500 dark:text-gray-400">
-          网易云本地音乐如未识别内嵌脚本，请把下载的 MP3 与同名 LRC 放在同一文件夹后重新扫描。
+          网易云可能忽略自制音频的本地歌词。<a href="#synchronized-script" className="font-medium text-indigo-600 underline dark:text-indigo-300">在本站查看同步脚本</a>，或下载 LRC 用支持本地歌词的播放器打开。
         </p>}
       </div>
     </div>

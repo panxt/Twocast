@@ -68,6 +68,7 @@ export default async function PodcastPage({ params }: PodcastPageProps) {
             keyPoints={audioData.key_points}
             scripts={audioData.script}
             timedScript={audioOutput?.timedScript}
+            audioUrl={audioUrl}
           />
         </div>
       </div>

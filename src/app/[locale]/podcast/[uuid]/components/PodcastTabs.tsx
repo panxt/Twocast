@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { ScriptItem } from '@/lib/podcast/types';
 import { useTranslation } from 'react-i18next';
@@ -11,13 +11,27 @@ interface PodcastTabsProps {
   keyPoints: string;
   scripts: ScriptItem[];
   timedScript?: { role: string; text: string; startMs: number }[];
+  audioUrl: string;
 }
 
-export default function PodcastTabs({ outline, keyPoints, scripts, timedScript }: PodcastTabsProps) {
-  const [activeTab, setActiveTab] = useState<'outline' | 'keyPoints' | 'scripts'>('outline');
+export default function PodcastTabs({ outline, keyPoints, scripts, timedScript, audioUrl }: PodcastTabsProps) {
+  const [activeTab, setActiveTab] = useState<'outline' | 'scripts'>(timedScript?.length ? 'scripts' : 'outline');
   const {t} = useTranslation('podcast');
   const { currentTime, seek, currentTrack } = useAudioPlayer();
-  const activeLine = timedScript?.findLastIndex(line => line.startMs <= currentTime * 1000) ?? -1;
+  const isCurrentTrack = currentTrack?.url === audioUrl;
+  const activeLine = isCurrentTrack ? (timedScript?.findLastIndex(line => line.startMs <= currentTime * 1000) ?? -1) : -1;
+  const scriptListRef = useRef<HTMLDivElement>(null);
+  const lineRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  useEffect(() => {
+    if (activeTab !== 'scripts' || activeLine < 0) return;
+    const list = scriptListRef.current;
+    const line = lineRefs.current[activeLine];
+    if (!list || !line) return;
+    const offset = line.getBoundingClientRect().top - list.getBoundingClientRect().top;
+    const top = list.scrollTop + offset - (list.clientHeight - line.clientHeight) / 2;
+    list.scrollTo({ top, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+  }, [activeLine, activeTab]);
 
   const tabs = [
     { id: 'outline', label: t('outline'), labelMobile: t('outline') },
@@ -25,14 +39,14 @@ export default function PodcastTabs({ outline, keyPoints, scripts, timedScript }
   ] as const;
 
   return (
-    <div className="relative bg-gradient-to-br from-white/90 to-gray-50/80 dark:from-gray-800/90 dark:to-gray-900/80 backdrop-blur-sm rounded-3xl overflow-hidden shadow-xl">
+    <div id="synchronized-script" className="relative bg-gradient-to-br from-white/90 to-gray-50/80 dark:from-gray-800/90 dark:to-gray-900/80 backdrop-blur-sm rounded-3xl overflow-hidden shadow-xl">
       {/* 顶部光泽效果 */}
       <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-32 h-1 bg-gradient-to-r from-transparent via-white/60 to-transparent rounded-full"></div>
 
       {/* 标签页导航 */}
       <div className="border-b border-gray-200/50 dark:border-gray-700/50">
         <nav className="flex p-3 sm:p-4">
-          <div className="grid grid-cols-3 gap-2 sm:flex sm:space-x-4 w-full">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:space-x-4 w-full">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
@@ -73,13 +87,16 @@ export default function PodcastTabs({ outline, keyPoints, scripts, timedScript }
         {/* 完整脚本标签页 */}
         <div className={`space-y-3 ${activeTab !== 'scripts' ? 'hidden' : ''}`}>
           <h3 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
-            🎙️ {t('scripts')}
+            🎙️ {timedScript?.length ? '同步脚本' : t('scripts')}
           </h3>
-          <div className="space-y-2">
+          {timedScript?.length ? <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">播放时自动定位当前段落；点击时间可跳转。网易云若不显示本地歌词，可直接在这里边听边看。</p> : null}
+          <div ref={scriptListRef} className="max-h-[min(65vh,640px)] space-y-2 overflow-y-auto overscroll-contain pr-2">
             {scripts.map((script, index) => (
               <div
                 key={index}
-                className={`relative py-2 sm:py-3 rounded-xl ${currentTrack && activeLine === index ? 'bg-indigo-100 dark:bg-indigo-900/40' : ''}`}
+                ref={element => { lineRefs.current[index] = element }}
+                aria-current={activeLine === index ? 'true' : undefined}
+                className={`relative px-3 py-2 sm:py-3 rounded-xl ${activeLine === index ? 'bg-indigo-100 ring-1 ring-indigo-300 dark:bg-indigo-900/40 dark:ring-indigo-700' : ''}`}
               >
                 {/* 角色标签和内容在同一行 */}
                 <div className="flex gap-3 items-start">
@@ -100,7 +117,7 @@ export default function PodcastTabs({ outline, keyPoints, scripts, timedScript }
                     <p className="text-gray-700 dark:text-gray-300 leading-relaxed text-base sm:text-lg">
                       {script.text}
                     </p>
-                    {timedScript?.[index] && <button type="button" onClick={() => seek(timedScript[index].startMs / 1000)}
+                    {timedScript?.[index] && <button type="button" onClick={() => seek(timedScript[index].startMs / 1000)} disabled={!isCurrentTrack}
                       className="mt-1 text-xs text-indigo-600 dark:text-indigo-300" aria-label={`跳转到第 ${index + 1} 段`}>
                       {Math.floor(timedScript[index].startMs / 60000)}:{String(Math.floor(timedScript[index].startMs / 1000) % 60).padStart(2, '0')}
                     </button>}
