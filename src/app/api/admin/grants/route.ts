@@ -12,10 +12,12 @@ export async function GET() {
     // sequential so one failed query cannot leave other promises unhandled.
     const grants = await db.select().from(apiGrantsTable).orderBy(desc(apiGrantsTable.createdAt))
     const users = await db.select({ id: sessionsTable.id, displayName: sessionsTable.displayName,
-      inviteCodeId: sessionsTable.inviteCodeId, role: sessionsTable.role }).from(sessionsTable)
+      inviteCodeId: sessionsTable.inviteCodeId, role: sessionsTable.role,
+      teamAccess: sessionsTable.teamAccess }).from(sessionsTable)
       .where(eq(sessionsTable.role, 'member')).orderBy(desc(sessionsTable.id))
     const codes = await db.select({ id: inviteCodesTable.id, label: inviteCodesTable.label,
-      usedCount: inviteCodesTable.usedCount, maxUses: inviteCodesTable.maxUses }).from(inviteCodesTable)
+      usedCount: inviteCodesTable.usedCount, maxUses: inviteCodesTable.maxUses,
+      teamAccess: inviteCodesTable.teamAccess }).from(inviteCodesTable)
     return NextResponse.json({ grants, users, codes })
   } catch (error) {
     console.error('Failed to list API grants', error)

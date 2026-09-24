@@ -7,13 +7,14 @@ import { TaskStatus } from '@/types/task'
 import { PodcastStep, TaskUserInput } from '@/lib/podcast/types'
 import { taskGetStepItem } from '@/lib/podcast/task'
 import { removeAudio, removeUpload } from '@/lib/podcast/storage'
+import { canManageTask } from '@/lib/podcast/access'
 
 export async function DELETE(_: NextRequest, context: { params: Promise<{ uuid: string }> }) {
   const user = await getCurrentUser()
   if (!user.userEmail) return NextResponse.json({ error: '请先登录' }, { status: 401 })
   const { uuid } = await context.params
   const [task] = await getDb().select().from(tasksTable).where(eq(tasksTable.uuid, uuid)).limit(1)
-  if (!task || (!user.isAdmin && task.userEmail !== user.userEmail)) {
+  if (!task || !canManageTask(task, user)) {
     return NextResponse.json({ error: '任务不存在' }, { status: 404 })
   }
   if (task.status === TaskStatus.Pending || task.status === TaskStatus.Processing) {
@@ -35,12 +36,19 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ u
   if (!user.userEmail) return NextResponse.json({ error: '请先登录' }, { status: 401 })
   const { uuid } = await context.params
   const [task] = await getDb().select().from(tasksTable).where(eq(tasksTable.uuid, uuid)).limit(1)
-  if (!task || (!user.isAdmin && task.userEmail !== user.userEmail)) {
+  if (!task || !canManageTask(task, user)) {
     return NextResponse.json({ error: '任务不存在' }, { status: 404 })
   }
   const body = await request.json().catch(() => null)
-  const folderPath = body?.folderPath
-  const labels = body?.labels
+  const folderPath = body?.folderPath ?? task.folderPath
+  const labels = body?.labels ?? task.labels
+  const visibility = body?.visibility ?? task.visibility
+  if (visibility !== 'private' && visibility !== 'team') {
+    return NextResponse.json({ error: '共享范围无效' }, { status: 400 })
+  }
+  if (visibility === 'team' && task.status !== TaskStatus.Success) {
+    return NextResponse.json({ error: '节目完成后才能共享给团队' }, { status: 409 })
+  }
   if (typeof folderPath !== 'string' || !folderPath.startsWith('/') || !folderPath.endsWith('/') ||
       folderPath.length > 255 || folderPath.includes('\\') ||
       folderPath.split('/').some((segment, index) => index > 0 && index < folderPath.split('/').length - 1 &&
@@ -50,6 +58,6 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ u
   if (!Array.isArray(labels) || labels.length > 8 || labels.some(label => typeof label !== 'string' || !label.trim() || label.length > 24)) {
     return NextResponse.json({ error: '最多设置 8 个标签，每个不超过 24 字' }, { status: 400 })
   }
-  await getDb().update(tasksTable).set({ folderPath, labels, updatedAt: new Date() }).where(eq(tasksTable.id, task.id))
+  await getDb().update(tasksTable).set({ folderPath, labels, visibility, updatedAt: new Date() }).where(eq(tasksTable.id, task.id))
   return NextResponse.json({ ok: true })
 }

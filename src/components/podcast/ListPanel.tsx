@@ -26,6 +26,8 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: Lis
   const [folder, setFolder] = useState('')
   const [scope, setScope] = useState('mine')
   const [isAdmin, setIsAdmin] = useState(false)
+  const [isTeamMember, setIsTeamMember] = useState(false)
+  const [viewerId, setViewerId] = useState(0)
   const [editing, setEditing] = useState<string | null>(null)
   const [folderDraft, setFolderDraft] = useState('/')
   const [labelsDraft, setLabelsDraft] = useState('')
@@ -36,7 +38,10 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: Lis
   useEffect(() => {
     fetch('/api/auth/me').then(response => response.json()).then(data => {
       setIsAdmin(Boolean(data.isAdmin))
+      setIsTeamMember(Boolean(data.isTeamMember))
+      setViewerId(Number(data.userId) || 0)
       if (data.isAdmin) setScope('all')
+      else if (data.isTeamMember) setScope('team')
     }).catch(() => undefined)
   }, [])
   useEffect(() => {
@@ -90,6 +95,21 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: Lis
     } catch (error) { toast.error(error instanceof Error ? error.message : '保存失败') }
     finally { setBusy(null) }
   }
+  async function toggleSharing(task: TaskVO) {
+    const next = task.visibility === 'team' ? 'private' : 'team'
+    setBusy(task.uuid)
+    try {
+      const response = await fetch(`/api/protected/tasks/${task.uuid}`, {
+        method: 'PATCH', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ visibility: next }),
+      })
+      const body = await response.json()
+      if (!response.ok) throw new Error(body.error || '更新共享范围失败')
+      toast.success(next === 'team' ? '已共享给团队成员' : '已设为仅自己可见')
+      setRevision(value => value + 1)
+    } catch (error) { toast.error(error instanceof Error ? error.message : '更新共享范围失败') }
+    finally { setBusy(null) }
+  }
   function togglePlay(task: TaskVO) {
     if (!task.result?.audio_url) return
     if (isPlaying && currentTrack?.id === task.uuid) pause()
@@ -100,9 +120,15 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: Lis
   return <section className="rounded-2xl border border-gray-200 bg-white/90 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900/80 sm:p-6">
     <div className="flex flex-wrap items-end justify-between gap-4">
       <div><h2 className="text-xl font-semibold text-gray-900 dark:text-white">音频与文件</h2>
-        <p className="mt-1 text-sm text-gray-500">共 {total} 条 · 可查看、分类和清理生成记录</p></div>
-      {isAdmin && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={scope === 'all'}
-        onChange={event => { setScope(event.target.checked ? 'all' : 'mine'); setPage(1) }} />查看所有用户</label>}
+        <p className="mt-1 text-sm text-gray-500">共 {total} 条 · 私人内容仅自己和管理员可见，共享节目供团队查看</p></div>
+      <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">查看范围
+        <select aria-label="查看范围" value={scope} onChange={event => { setScope(event.target.value); setPage(1) }}
+          className="rounded-lg border px-3 py-2 dark:bg-gray-800">
+          <option value="mine">仅我的</option>
+          {isTeamMember && <option value="team">团队与我的</option>}
+          {isAdmin && <option value="all">所有成员（管理）</option>}
+        </select>
+      </label>
     </div>
     <div className="mt-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem_10rem]">
       <input aria-label="搜索音频" placeholder="搜索标题、原文件名或任务编号" value={search}
@@ -133,6 +159,7 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: Lis
               className="block truncate font-medium text-gray-900 hover:text-indigo-600 dark:text-white">{titleOf(task)}</Link>
             <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
               <span>{task.owner_name || '用户'}</span><span>{task.folder_path || '/'}</span>
+              <span>{task.visibility === 'team' ? '团队共享' : '仅自己可见'}</span>
               <span>{task.created_at ? new Date(task.created_at).toLocaleString() : ''}</span>
               {task.result?.duration && <span>{formatDuration(task.result.duration)}</span>}
               {task.user_inputs?.fileName && <a href={`/api/protected/tasks/${task.uuid}/file`}
@@ -140,9 +167,15 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: Lis
             </div>
           </div>
           <span className={`rounded-full px-2 py-1 text-xs ${task.status === TaskStatus.Failed ? 'bg-red-100 text-red-700' : task.status === TaskStatus.Success ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{task.status_human}</span>
-          <button onClick={() => { setEditing(editing === task.uuid ? null : task.uuid); setFolderDraft(task.folder_path || '/'); setLabelsDraft((task.labels || []).join(', ')) }} className="rounded-lg border px-3 py-1.5 text-sm">分类</button>
-          <button onClick={() => remove(task)} disabled={busy === task.uuid || task.status === TaskStatus.Pending || task.status === TaskStatus.Processing}
-            className="rounded-lg border border-red-200 px-3 py-1.5 text-sm text-red-700 disabled:opacity-40">删除</button>
+          {(isAdmin || task.user_id === viewerId) && <>
+            <button onClick={() => toggleSharing(task)} disabled={busy === task.uuid || (task.visibility !== 'team' && task.status !== TaskStatus.Success)}
+              className="rounded-lg border border-indigo-200 px-3 py-1.5 text-sm text-indigo-700 disabled:opacity-40 dark:text-indigo-300">
+              {task.visibility === 'team' ? '设为私有' : '共享给团队'}
+            </button>
+            <button onClick={() => { setEditing(editing === task.uuid ? null : task.uuid); setFolderDraft(task.folder_path || '/'); setLabelsDraft((task.labels || []).join(', ')) }} className="rounded-lg border px-3 py-1.5 text-sm">分类</button>
+            <button onClick={() => remove(task)} disabled={busy === task.uuid || task.status === TaskStatus.Pending || task.status === TaskStatus.Processing}
+              className="rounded-lg border border-red-200 px-3 py-1.5 text-sm text-red-700 disabled:opacity-40">删除</button>
+          </>}
         </div>
         {(task.labels?.length || 0) > 0 && <div className="ml-14 mt-2 flex flex-wrap gap-1">{task.labels?.map(label => <span key={label} className="rounded bg-gray-100 px-2 py-0.5 text-xs dark:bg-gray-700">{label}</span>)}</div>}
         {task.status === TaskStatus.Failed && task.error && <p className="ml-14 mt-2 text-xs text-red-600">{task.error}</p>}

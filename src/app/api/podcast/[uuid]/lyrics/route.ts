@@ -6,13 +6,14 @@ import { PodcastStep } from '@/lib/podcast/types'
 import { LongTextResult } from '@/queue/types'
 import { toLrc } from '@/lib/podcast/lyrics'
 import { safeAudioBasename } from '@/lib/podcast/filename'
+import { canReadTask } from '@/lib/podcast/access'
 
 export async function GET(_: Request, context: { params: Promise<{ uuid: string }> }) {
   const user = await getCurrentUser()
   if (!user.userEmail) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { uuid } = await context.params
   const task = await getTaskByUuid(uuid)
-  if (!task || (!user.isAdmin && task.userEmail !== user.userEmail)) {
+  if (!task || !canReadTask(task, user)) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
   const audio = taskGetStepItem(task, PodcastStep.Audio)

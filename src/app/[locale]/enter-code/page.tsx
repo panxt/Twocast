@@ -32,8 +32,9 @@ export default function EnterCode() {
   }
 
   return <main className="mx-auto max-w-md px-6 py-24 text-center">
-    <h1 className="text-3xl font-bold">进入播客工作台</h1>
-    <p className="mt-4 text-gray-600">输入邀请码或个人登录码。</p>
+    <p className="mb-3 text-sm font-semibold tracking-widest text-indigo-600">驿路通·声笺</p>
+    <h1 className="text-3xl font-bold">进入团队播客工作台</h1>
+    <p className="mt-4 text-gray-600">输入团队邀请码或个人登录码。</p>
     {loginCode && <section className="mt-8 rounded-xl border p-5 text-left">
       <h2 className="font-semibold">请保存你的个人登录码</h2>
       <p className="mt-2 text-sm">邀请码只供首次加入；下次换设备或会话过期时使用此码。请勿分享。</p>

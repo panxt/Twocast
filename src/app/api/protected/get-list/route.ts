@@ -13,7 +13,7 @@ import { getTaskStatusHuman } from "@/utils/task";
 import { getAudioUrl } from '@/lib/podcast/storage';
 
 export async function GET(req: NextRequest) {
-    const { userId, userEmail, isAdmin } = await getCurrentUser()
+    const { userId, userEmail, isAdmin, isTeamMember } = await getCurrentUser()
     if (!userEmail) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'content-type': 'application/json' } });
     }
@@ -25,8 +25,10 @@ export async function GET(req: NextRequest) {
     const status = searchParams.get('status') || '';
     const search = (searchParams.get('search') || '').trim().slice(0, 80);
     const folder = (searchParams.get('folder') || '').slice(0, 255);
-    const scopeAll = isAdmin && searchParams.get('scope') === 'all';
-    const conditions = [scopeAll ? undefined : eq(tasksTable.userEmail, userEmail)];
+    const scope = searchParams.get('scope') || (isAdmin ? 'all' : isTeamMember ? 'team' : 'mine');
+    const owner = eq(tasksTable.userEmail, userEmail);
+    const conditions = [scope === 'all' && isAdmin ? undefined : scope === 'team' && isTeamMember ?
+      or(owner, eq(tasksTable.visibility, 'team')) : owner];
     if (status && status !== 'all') conditions.push(eq(tasksTable.status, status));
     if (folder) conditions.push(eq(tasksTable.folderPath, folder));
     if (search) conditions.push(or(ilike(tasksTable.uuid, `%${search}%`),
@@ -62,6 +64,7 @@ export async function GET(req: NextRequest) {
             owner_name: ownerName || (task.userEmail === 'admin@twocast.invalid' ? '管理员' : `用户 #${task.userId}`),
             folder_path: task.folderPath,
             labels: task.labels,
+            visibility: task.visibility,
             error,
             status: task.status as TaskStatus,
             status_human: getTaskStatusHuman(task.status as TaskStatus, true),

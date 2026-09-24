@@ -19,6 +19,7 @@ export async function POST(request: NextRequest) {
     timingSafeEqual(Buffer.from(sha256(code)), Buffer.from(sha256(adminCode)))
   const db = getDb()
   let inviteCodeId: number | null = null
+  let teamAccess = false
   const token = randomBytes(32).toString('hex')
 
   if (!admin) {
@@ -45,18 +46,19 @@ export async function POST(request: NextRequest) {
         sql`${inviteCodesTable.usedCount} < ${inviteCodesTable.maxUses}`,
         sql`(${inviteCodesTable.expiresAt} IS NULL OR ${inviteCodesTable.expiresAt} > NOW())`,
       ))
-      .returning({ id: inviteCodesTable.id })
+      .returning({ id: inviteCodesTable.id, teamAccess: inviteCodesTable.teamAccess })
     if (!consumed[0]) {
       return NextResponse.json({ error: '邀请码无效或已用完' }, { status: 403 })
     }
     inviteCodeId = consumed[0].id
+    teamAccess = consumed[0].teamAccess
   }
 
   const loginCode = admin ? '' : randomBytes(24).toString('base64url').toUpperCase()
   await db.insert(sessionsTable).values({
     tokenHash: sha256(token), inviteCodeId,
     loginCodeHash: loginCode ? sha256(loginCode) : null,
-    role: admin ? 'admin' : 'member',
+    role: admin ? 'admin' : 'member', teamAccess,
     expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
   })
   const response = NextResponse.json({ ok: true, role: admin ? 'admin' : 'member', loginCode })

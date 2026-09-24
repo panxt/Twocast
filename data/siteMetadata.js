@@ -1,19 +1,19 @@
 /** @type {import("pliny/config").PlinyConfig } */
 const siteMetadata = {
-  title: '播客工作台',
-  author: 'Admin',
-  headerTitle: '播客工作台',
-  description: '音频与资料管理',
-  language: 'en',
+  title: '驿路通·声笺',
+  author: '驿路通',
+  headerTitle: '驿路通·声笺',
+  description: '小团队的资料、播客与声音工作台',
+  language: 'zh',
   theme: 'system', // system, dark or light
   siteUrl: process.env['NEXT_PUBLIC_SITE_URL'],
   // siteRepo: 'https://github.com/PxlSyl/tailwind-nextjs-starter-blog-i18n',
-  favicon: '/assets/site/favicon.ico',
-  // siteLogo: '/assets/site/sitelogo.png',
+  favicon: '/brand-mark.svg',
+  siteLogo: '/brand-mark.svg',
   socialBanner: '/static/images/twitter-card.png',
   // mastodon: 'https://mastodon.social/@mastodonuser',
   // email: 'address@yoursite.com',
-  github: 'https://github.com/panyanyany/Twocast',
+  github: 'https://github.com/panxt/Twocast',
   x: 'https://twitter.com/x',
   // twitter: 'https://twitter.com/Twitter',
   facebook: 'https://facebook.com',
@@ -21,7 +21,7 @@ const siteMetadata = {
   linkedin: 'https://www.linkedin.com',
   threads: 'https://www.threads.net',
   instagram: 'https://www.instagram.com',
-  locale: 'en',
+  locale: 'zh',
   multiauthors: true,
   analytics: {
     // If you want to use an analytics provider you have to add it to the

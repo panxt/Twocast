@@ -8,7 +8,8 @@ export async function GET() {
   if (!(await getCurrentUser()).isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const codes = await getDb().select({
     id: inviteCodesTable.id, label: inviteCodesTable.label, maxUses: inviteCodesTable.maxUses,
-    usedCount: inviteCodesTable.usedCount, expiresAt: inviteCodesTable.expiresAt,
+    usedCount: inviteCodesTable.usedCount, teamAccess: inviteCodesTable.teamAccess,
+    expiresAt: inviteCodesTable.expiresAt,
     createdAt: inviteCodesTable.createdAt,
   }).from(inviteCodesTable)
   return NextResponse.json({ codes })
@@ -19,10 +20,11 @@ export async function POST(request: NextRequest) {
   const input = await request.json().catch(() => null)
   const maxUses = Number(input?.maxUses ?? 1)
   const label = String(input?.label || '').slice(0, 120)
+  const teamAccess = input?.teamAccess === true
   if (!Number.isInteger(maxUses) || maxUses < 1 || maxUses > 100) {
     return NextResponse.json({ error: 'maxUses must be 1–100' }, { status: 400 })
   }
   const code = randomBytes(18).toString('base64url').toUpperCase()
-  await getDb().insert(inviteCodesTable).values({ codeHash: sha256(code), label, maxUses })
+  await getDb().insert(inviteCodesTable).values({ codeHash: sha256(code), label, maxUses, teamAccess })
   return NextResponse.json({ code }) // Plaintext is shown only once.
 }
