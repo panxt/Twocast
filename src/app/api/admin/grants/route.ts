@@ -17,7 +17,8 @@ export async function GET() {
       .where(eq(sessionsTable.role, 'member')).orderBy(desc(sessionsTable.id))
     const codes = await db.select({ id: inviteCodesTable.id, label: inviteCodesTable.label,
       usedCount: inviteCodesTable.usedCount, maxUses: inviteCodesTable.maxUses,
-      teamAccess: inviteCodesTable.teamAccess }).from(inviteCodesTable)
+      teamAccess: inviteCodesTable.teamAccess, expiresAt: inviteCodesTable.expiresAt }).from(inviteCodesTable)
+      .orderBy(desc(inviteCodesTable.createdAt))
     return NextResponse.json({ grants, users, codes })
   } catch (error) {
     console.error('Failed to list API grants', error)
