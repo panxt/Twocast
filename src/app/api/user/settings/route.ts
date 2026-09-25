@@ -33,6 +33,11 @@ export async function PUT(request: NextRequest) {
   for (const key of Object.keys(input)) {
     if (!(SETTING_KEYS as readonly string[]).includes(key)) return NextResponse.json({ error: '未知配置项' }, { status: 400 })
     const value = input[key]
+    if (key === 'API_LLM_ENABLED' || key === 'API_TTS_ENABLED') {
+      if (value !== '0' && value !== '1') return NextResponse.json({ error: `${key} 只能启用或停用` }, { status: 400 })
+      changes.push({ key, value })
+      continue
+    }
     if (value === null) {
       changes.push({ key: key as SettingKey, value: null })
       continue

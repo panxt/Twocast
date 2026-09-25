@@ -9,8 +9,10 @@ export const SETTING_KEYS = [
   'LLM_CHAT_URL', 'LLM_CHAT_MODEL', 'LLM_API_KEY',
   'LLM_SEARCH_URL', 'LLM_SEARCH_MODEL', 'LLM_SEARCH_API_KEY',
   'MINIMAX_GROUP_ID', 'MINIMAX_TOKEN',
+  'API_LLM_ENABLED', 'API_TTS_ENABLED',
 ] as const
 export type SettingKey = typeof SETTING_KEYS[number]
+export type ApiToggleKey = 'API_LLM_ENABLED' | 'API_TTS_ENABLED'
 
 function encryptionKey(): Buffer {
   const raw = process.env.SETTINGS_ENCRYPTION_KEY || ''
