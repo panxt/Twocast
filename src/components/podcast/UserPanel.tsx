@@ -3,8 +3,9 @@
 import { useState } from 'react'
 import { ListPanel } from './ListPanel'
 import { UserInput } from './UserInput'
+import type { EpisodeListData } from '@/lib/podcast/list'
 
-export function UserPanel() {
+export function UserPanel({ initialList }: { initialList: EpisodeListData }) {
   const [refreshTrigger, setRefreshTrigger] = useState(0)
   return <main className="min-h-[70vh] bg-gray-50 px-4 py-8 dark:bg-gray-950 sm:py-12">
     <div className="mx-auto max-w-6xl space-y-8">
@@ -20,7 +21,7 @@ export function UserPanel() {
           document.getElementById('episode-library')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
         }} />
       </section>
-      <ListPanel refreshTrigger={refreshTrigger} apiUrl="/api/protected/get-list" />
+      <ListPanel refreshTrigger={refreshTrigger} apiUrl="/api/protected/get-list" initialList={initialList} />
     </div>
   </main>
 }

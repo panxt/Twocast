@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
@@ -9,8 +9,9 @@ import { TaskVO } from '@/lib/client-api/types/TaskVO'
 import { TaskStatus } from '@/types/task'
 import { getLocalePath } from '@/utils/locale-util'
 import { formatDuration } from '@/utils/time'
+import type { EpisodeListData } from '@/lib/podcast/list'
 
-interface ListPanelProps { refreshTrigger?: number; apiUrl: string; showPagination?: boolean }
+interface ListPanelProps { refreshTrigger?: number; apiUrl: string; showPagination?: boolean; initialList?: EpisodeListData }
 type FolderOption = { path: string; label: string; depth: number; episodes: number }
 const titleOf = (task: TaskVO) => task.result?.title || task.user_inputs?.fileName || task.user_inputs?.text?.slice(0, 48) || '未命名播客'
 const progressLabel = (task: TaskVO) => {
@@ -22,34 +23,35 @@ const progressLabel = (task: TaskVO) => {
   return '正在生成'
 }
 
-export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: ListPanelProps) {
+export function ListPanel({ refreshTrigger, apiUrl, showPagination = true, initialList }: ListPanelProps) {
   const { i18n } = useTranslation()
   const { play, pause, resume, isPlaying, isLoading, currentTrack } = useAudioPlayer()
-  const [items, setItems] = useState<TaskVO[]>([])
+  const [items, setItems] = useState<TaskVO[]>(initialList?.items || [])
   const [page, setPage] = useState(1)
-  const [pages, setPages] = useState(1)
-  const [total, setTotal] = useState(0)
+  const [pages, setPages] = useState(initialList?.pagination.totalPages || 1)
+  const [total, setTotal] = useState(initialList?.pagination.total || 0)
   const [status, setStatus] = useState('all')
   const [search, setSearch] = useState('')
   const [query, setQuery] = useState('')
   const [folder, setFolder] = useState('')
   const [folders, setFolders] = useState<FolderOption[]>([])
   const [scope, setScope] = useState('')
-  const [defaultScope, setDefaultScope] = useState('mine')
-  const [viewerLoaded, setViewerLoaded] = useState(false)
-  const [isAdmin, setIsAdmin] = useState(false)
-  const [isTeamMember, setIsTeamMember] = useState(false)
-  const [viewerId, setViewerId] = useState(0)
+  const [defaultScope, setDefaultScope] = useState(initialList?.viewer.scope || 'mine')
+  const [viewerLoaded, setViewerLoaded] = useState(Boolean(initialList))
+  const [isAdmin, setIsAdmin] = useState(Boolean(initialList?.viewer.isAdmin))
+  const [isTeamMember, setIsTeamMember] = useState(Boolean(initialList?.viewer.isTeamMember))
+  const [viewerId, setViewerId] = useState(initialList?.viewer.userId || 0)
   const [editing, setEditing] = useState<string | null>(null)
   const [folderDraft, setFolderDraft] = useState('/')
   const [labelsDraft, setLabelsDraft] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(!initialList)
   const [loadError, setLoadError] = useState('')
-  const [loadedQuery, setLoadedQuery] = useState('')
+  const [loadedQuery, setLoadedQuery] = useState(initialList ? JSON.stringify([apiUrl, 1, 'all', '', '', '']) : '')
   const [errorQuery, setErrorQuery] = useState('')
   const [revision, setRevision] = useState(0)
   const [directoryRevision, setDirectoryRevision] = useState(0)
+  const skipInitialFetch = useRef(Boolean(initialList))
   const currentQuery = JSON.stringify([apiUrl, page, status, query, scope, folder])
   const showingCurrent = loadedQuery === currentQuery && search === query
   const currentError = errorQuery === currentQuery ? loadError : ''
@@ -70,6 +72,10 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: Lis
     return () => { alive = false }
   }, [viewerLoaded, scope, refreshTrigger, directoryRevision])
   useEffect(() => {
+    if (skipInitialFetch.current) {
+      skipInitialFetch.current = false
+      return
+    }
     let alive = true
     setLoading(true)
     setLoadError('')
@@ -204,7 +210,7 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: Lis
             <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
               <span>{task.owner_name || '用户'}</span><span>{task.folder_path || '/'}</span>
               <span>{task.visibility === 'team' ? '团队共享' : '仅自己可见'}</span>
-              <span>{task.created_at ? new Date(task.created_at).toLocaleString() : ''}</span>
+              <span>{task.created_at ? new Date(task.created_at).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) : ''}</span>
               {task.result?.duration && <span>{formatDuration(task.result.duration)}</span>}
               {task.user_inputs?.fileName && <a href={`/api/protected/tasks/${task.uuid}/file`}
                 className="text-indigo-600 hover:underline" onClick={event => event.stopPropagation()}>原文件：{task.user_inputs.fileName}</a>}
