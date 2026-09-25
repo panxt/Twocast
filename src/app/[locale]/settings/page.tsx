@@ -30,11 +30,28 @@ export default function SettingsPage() {
   const [grants, setGrants] = useState<Grant[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [codes, setCodes] = useState<Code[]>([])
+  const [teamLoading, setTeamLoading] = useState(false)
+  const [teamError, setTeamError] = useState('')
   const [target, setTarget] = useState('')
   const [capability, setCapability] = useState('llm')
   const [episodes, setEpisodes] = useState(3)
 
-  async function load() {
+  async function loadTeam() {
+    setTeamLoading(true)
+    setTeamError('')
+    try {
+      const response = await fetch('/api/admin/grants')
+      if (!response.ok) throw new Error('团队资料加载失败，请刷新重试')
+      const data = await response.json()
+      setGrants(data.grants || [])
+      setUsers(data.users || [])
+      setCodes(data.codes || [])
+    } catch (error) {
+      setTeamError(error instanceof Error ? error.message : '团队资料加载失败')
+    } finally { setTeamLoading(false) }
+  }
+
+  async function load(refreshTeam = true) {
     const me = await fetch('/api/auth/me').then(response => response.json())
     setAdmin(Boolean(me.isAdmin))
     setDisplayName(me.displayName || '')
@@ -50,14 +67,11 @@ export default function SettingsPage() {
     setValues(next)
     setConfigured(flags)
     setAccess(data.access || null)
-    if (me.isAdmin) {
-      const grantsData = await fetch('/api/admin/grants').then(response => response.json())
-      setGrants(grantsData.grants || [])
-      setUsers(grantsData.users || [])
-      setCodes(grantsData.codes || [])
-    }
     setReady(true)
+    if (me.isAdmin && refreshTeam) void loadTeam()
   }
+  // Initial data is loaded once; later updates call load or loadTeam explicitly.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load().catch(() => { setMessage('配置加载失败'); setReady(true) }) }, [])
 
   async function save() {
@@ -67,7 +81,7 @@ export default function SettingsPage() {
     })
     const data = await response.json()
     setMessage(response.ok ? '已保存' : data.error || '保存失败')
-    if (response.ok) await load()
+    if (response.ok) await load(false)
   }
   async function clearSecret(key: string) {
     if (admin) return
@@ -75,7 +89,7 @@ export default function SettingsPage() {
       method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ [key]: null }),
     })
     setMessage(response.ok ? '已移除私有密钥' : (await response.json()).error)
-    if (response.ok) await load()
+    if (response.ok) await load(false)
   }
   async function createInvite() {
     const response = await fetch('/api/admin/invites', {
@@ -85,14 +99,14 @@ export default function SettingsPage() {
     const data = await response.json()
     setInviteCode(response.ok ? data.code : '')
     setMessage(response.ok ? '请现在复制邀请码；之后无法再次查看明文。' : data.error || '创建失败')
-    if (response.ok) await load()
+    if (response.ok) await loadTeam()
   }
   async function closeInvite(id: number) {
     if (!window.confirm('关闭后，这个邀请码不能再用于加入。已加入的成员仍可登录。')) return
     const response = await fetch(`/api/admin/invites?id=${id}`, { method: 'DELETE' })
     const data = await response.json()
     setMessage(response.ok ? '邀请码已关闭' : data.error || '关闭失败')
-    if (response.ok) await load()
+    if (response.ok) await loadTeam()
   }
   async function renewLoginCode() {
     const response = await fetch('/api/user/login-code', { method: 'POST' })
@@ -115,12 +129,12 @@ export default function SettingsPage() {
     })
     const data = await response.json()
     setMessage(response.ok ? '授权已添加' : data.error || '授权失败')
-    if (response.ok) await load()
+    if (response.ok) await loadTeam()
   }
   async function revoke(id: number) {
     const response = await fetch(`/api/admin/grants?id=${id}`, { method: 'DELETE' })
     setMessage(response.ok ? '已撤销授权' : (await response.json()).error)
-    if (response.ok) await load()
+    if (response.ok) await loadTeam()
   }
   async function setTeamAccess(userId: number, teamAccess: boolean) {
     const response = await fetch('/api/admin/members', {
@@ -129,7 +143,7 @@ export default function SettingsPage() {
     })
     const data = await response.json()
     setMessage(response.ok ? (teamAccess ? '已加入团队' : '已改为体验用户') : data.error || '更新失败')
-    if (response.ok) await load()
+    if (response.ok) await loadTeam()
   }
   async function resetMemberLoginCode(userId: number) {
     const member = users.find(item => item.id === userId)
@@ -142,11 +156,15 @@ export default function SettingsPage() {
     setMessage(response.ok ? '新登录码只显示这一次，请现在保存并交给该成员。' : data.error || '重置失败')
   }
 
-  if (!ready) return <main className="mx-auto max-w-3xl p-8">正在加载…</main>
-  return <main className="mx-auto max-w-3xl space-y-8 p-6 sm:p-8">
+  if (!ready) return <main className="mx-auto max-w-5xl space-y-6 p-6 sm:p-8">
+    <h1 className="text-3xl font-semibold">模型与权限设置</h1>
+    <p role="status" className="text-sm text-gray-500">正在加载配置…</p>
+    <div className="h-56 animate-pulse rounded-xl border bg-gray-50 dark:bg-gray-900" />
+  </main>
+  return <main className="mx-auto max-w-5xl space-y-8 p-6 sm:p-8">
     <header><h1 className="text-3xl font-semibold">模型与权限设置</h1>
       <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-        {admin ? '全局密钥仅供管理员及明确授权的体验用户使用。' : '你的密钥只保存在服务端，仅你的生成任务会使用。私有配置优先于管理员授权。'}
+        {admin ? '全局密钥仅供管理员及明确授权的成员使用。' : '你的密钥只保存在服务端，仅你的生成任务会使用。私有配置优先于管理员授权。'}
       </p></header>
     {!admin && access && <section className="rounded-xl border p-4 text-sm">
       <h2 className="font-semibold">当前可用权限</h2>
@@ -181,17 +199,22 @@ export default function SettingsPage() {
       {loginCode && <output className="block break-all rounded bg-gray-100 p-3 font-mono dark:bg-gray-800">{loginCode}</output>}
     </section>}
     {admin && <>
+      {teamError && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        {teamError} <button type="button" className="ml-2 underline" onClick={() => void loadTeam()}>重试</button>
+      </p>}
+      <div className="grid gap-6 lg:grid-cols-2">
       <section className="space-y-3 rounded-xl border p-5">
         <h2 className="text-lg font-semibold">邀请码</h2>
         <p className="text-sm text-gray-500">体验用户只能看自己的内容；团队成员还能查看被明确共享到团队的节目。</p>
-        <div className="flex gap-2"><input placeholder="备注，例如：朋友 A" value={inviteLabel}
+        <div className="flex flex-col gap-2 sm:flex-row"><input placeholder="备注，例如：朋友 A" value={inviteLabel}
           onChange={event => setInviteLabel(event.target.value)} className="min-w-0 flex-1 rounded border px-3 py-2 dark:bg-gray-800" />
-          <button onClick={createInvite} className="rounded bg-indigo-600 px-4 py-2 text-white">生成单次邀请码</button></div>
+          <button onClick={createInvite} className="whitespace-nowrap rounded bg-indigo-600 px-4 py-2 text-white">生成单次邀请码</button></div>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={inviteTeamAccess}
           onChange={event => setInviteTeamAccess(event.target.checked)} />将受邀者加入团队</label>
         {inviteCode && <output className="block break-all rounded bg-gray-100 p-3 font-mono dark:bg-gray-800">{inviteCode}</output>}
         <div className="divide-y rounded-lg border px-3 text-sm dark:divide-gray-700 dark:border-gray-700">
-          {codes.length === 0 && <p className="py-3 text-gray-500">还没有邀请码</p>}
+          {teamLoading && codes.length === 0 && <p className="py-3 text-gray-500">正在加载邀请码…</p>}
+          {!teamLoading && !teamError && codes.length === 0 && <p className="py-3 text-gray-500">还没有邀请码</p>}
           {codes.map(code => <div key={code.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
             <div><span className="font-medium">{code.label || `邀请码 #${code.id}`}</span>
               <p className="mt-1 text-xs text-gray-500">{code.teamAccess ? '团队成员' : '体验用户'} · {inviteState(code)} · 已加入 {code.usedCount} 人</p></div>
@@ -203,9 +226,14 @@ export default function SettingsPage() {
       <section className="space-y-3 rounded-xl border p-5">
         <h2 className="text-lg font-semibold">团队成员</h2>
         <p className="text-sm text-gray-500">旧邀请码和已有账号默认是体验用户；可在这里逐个加入团队。成员仅能管理自己的节目。</p>
-        <div className="divide-y text-sm dark:divide-gray-700">{users.map(user => <div key={user.id} className="py-3">
+        <div className="divide-y text-sm dark:divide-gray-700">
+          {teamLoading && users.length === 0 && <p className="py-3 text-gray-500">正在加载成员…</p>}
+          {!teamLoading && !teamError && users.length === 0 && <p className="py-3 text-gray-500">还没有成员</p>}
+          {users.map(user => <div key={user.id} className="py-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <span>用户 #{user.id} {user.displayName || ''} · {user.teamAccess ? '团队成员' : '体验用户'}</span>
+            <div><span className="font-medium">{user.displayName || `用户 #${user.id}`}</span>
+              <p className="mt-1 text-xs text-gray-500">#{user.id} · {user.teamAccess ? '团队成员' : '体验用户'}
+                {user.inviteCodeId ? ` · 来自 ${codes.find(code => code.id === user.inviteCodeId)?.label || `邀请码 #${user.inviteCodeId}`}` : ''}</p></div>
             <div className="flex gap-2">
               <button onClick={() => resetMemberLoginCode(user.id)} className="rounded border px-3 py-1.5 text-xs">重置登录码</button>
               <button onClick={() => setTeamAccess(user.id, !user.teamAccess)} className="rounded border px-3 py-1.5 text-xs">
@@ -218,11 +246,12 @@ export default function SettingsPage() {
           </output>}
         </div>)}</div>
       </section>
+      </div>
       <section className="space-y-3 rounded-xl border p-5">
         <h2 className="text-lg font-semibold">共享 API 授权</h2>
         <p className="text-sm text-gray-500">可指定邀请码或已加入的用户；大模型与语音分别授权，额度按节目计算。</p>
-        <div className="grid gap-2 sm:grid-cols-[1fr_8rem_6rem_auto]">
-          <select aria-label="授权对象" value={target} onChange={event => setTarget(event.target.value)} className="rounded border px-2 py-2 dark:bg-gray-800">
+        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_8rem_6rem_6rem]">
+          <select aria-label="授权对象" value={target} onChange={event => setTarget(event.target.value)} className="min-w-0 rounded border px-2 py-2 dark:bg-gray-800">
             <option value="">选择用户或邀请码</option>
             {users.map(user => <option key={user.id} value={`user:${user.id}`}>用户 #{user.id} {user.displayName || ''}</option>)}
             {codes.map(code => <option key={code.id} value={`code:${code.id}`}>邀请码 #{code.id} {code.label || ''} · {code.teamAccess ? '团队' : '体验'} · {inviteState(code)}</option>)}
@@ -231,9 +260,12 @@ export default function SettingsPage() {
             <option value="llm">大模型</option><option value="tts">语音</option></select>
           <input aria-label="节目额度" type="number" min="1" max="1000" value={episodes}
             onChange={event => setEpisodes(Number(event.target.value))} className="rounded border px-2 py-2 dark:bg-gray-800" />
-          <button onClick={grant} disabled={!target} className="rounded bg-indigo-600 px-4 py-2 text-white disabled:opacity-40">授权</button>
+          <button onClick={grant} disabled={!target || teamLoading} className="whitespace-nowrap rounded bg-indigo-600 px-4 py-2 text-white disabled:opacity-40">授权</button>
         </div>
-        <div className="divide-y text-sm">{grants.map(item => <div key={item.id} className="flex items-center justify-between gap-2 py-2">
+        <div className="divide-y text-sm">
+          {teamLoading && grants.length === 0 && <p className="py-3 text-gray-500">正在加载授权…</p>}
+          {!teamLoading && !teamError && grants.length === 0 && <p className="py-3 text-gray-500">尚未分配共享 API 额度</p>}
+          {grants.map(item => <div key={item.id} className="flex items-center justify-between gap-2 py-2">
           <span>{item.userId ? `用户 #${item.userId}` : `邀请码 #${item.inviteCodeId}`} · {item.capability === 'llm' ? '大模型' : '语音'} · {item.usedEpisodes}/{item.maxEpisodes} 期</span>
           <button onClick={() => revoke(item.id)} className="text-red-600">撤销</button>
         </div>)}</div>
