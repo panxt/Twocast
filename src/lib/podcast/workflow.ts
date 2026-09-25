@@ -10,7 +10,7 @@ import { processLongTextTask } from '@/queue/long_text_queue'
 import { taskGetStepItem, taskUpdateStepItem } from './task'
 import { PodcastStep, Platform, ScriptItem } from './types'
 import { LongTextResult } from '@/queue/types'
-import { genVoiceMinimax } from './audio_parts'
+import { genVoiceMinimax, genVoiceFishAudio, genVoiceGemini } from './audio_parts'
 import { finalizeMp3 } from './finalize_mp3'
 import { readAudio, removeAudio, storeAudio } from './storage'
 import { TaskStatus } from '@/types/task'
@@ -60,7 +60,9 @@ async function getAudioPlan(uuid: string) {
   'use step'
   const task = await loadTask(uuid)
   const inputs = task.userInputs as TaskUserInput
-  if (inputs.platform !== Platform.Minimax) throw new Error('Vercel beta currently supports MiniMax TTS only')
+  if (![Platform.Minimax, Platform.FishAudio, Platform.Gemini].includes(inputs.platform as Platform)) {
+    throw new Error('不支持的语音平台')
+  }
   const step = taskGetStepItem(task, PodcastStep.Audio)
   const result = step.input as LongTextResult
   if (!result?.script?.length) throw new Error('No generated script')
@@ -73,7 +75,9 @@ async function generateAudioSegment(uuid: string, index: number, total: number, 
   const task = await loadTask(uuid)
   const access = (task.userInputs as TaskUserInput).apiAccess || { llm: 'admin' as const, tts: 'admin' as const }
   const inputs = task.userInputs as TaskUserInput
-  const audio = await withApiContext({ userId: task.userId, access, keyOwners: inputs.apiKeyOwners, keyShareIds: inputs.apiKeyShareIds }, () => genVoiceMinimax(line.text, { id: voiceId }))
+  const synthesize = inputs.platform === Platform.FishAudio ? genVoiceFishAudio
+    : inputs.platform === Platform.Gemini ? genVoiceGemini : genVoiceMinimax
+  const audio = await withApiContext({ userId: task.userId, access, keyOwners: inputs.apiKeyOwners, keyShareIds: inputs.apiKeyShareIds }, () => synthesize(line.text, { id: voiceId }))
   const filename = `tmp-${uuid}-${index}.mp3`
   await storeAudio(filename, audio.audio)
   await updateProgress(task.id, 'audio', index + 1, total)

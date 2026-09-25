@@ -1,13 +1,16 @@
 import axios from 'axios';
 import { ScriptItem, VoiceOption } from './types';
-import msgpack from 'msgpack-lite';
 import pLimit from 'p-limit';
 import { AudioResult } from './types';
-import { parseAudioBuffer } from '@/utils/ffprobe-util';
 import { getAxiosInstance } from '@/utils/http';
 import { getApiSetting } from '@/lib/settings';
 import { finalizeMp3 } from './finalize_mp3';
 import { describeApiFailure } from '@/lib/api-errors';
+import { spawn } from 'child_process';
+import { mkdtemp, readFile, rm, writeFile } from 'fs/promises';
+import { tmpdir } from 'os';
+import path from 'path';
+import ffmpegPath from 'ffmpeg-static';
 
 export async function genVoiceMinimax(text: string, voiceOption: VoiceOption): Promise<AudioResult> {
     const [groupId, token] = await Promise.all([getApiSetting('MINIMAX_GROUP_ID'), getApiSetting('MINIMAX_TOKEN')]);
@@ -57,12 +60,13 @@ export async function genVoiceMinimax(text: string, voiceOption: VoiceOption): P
 }
 
 export async function genVoiceFishAudio(text: string, voiceOption: VoiceOption): Promise<AudioResult> {
+    const [token, model] = await Promise.all([getApiSetting('FISH_AUDIO_TOKEN'), getApiSetting('FISH_AUDIO_MODEL')]);
+    if (!token) throw new Error('Fish Audio API Key 尚未配置');
     const url = 'https://api.fish.audio/v1/tts';
     const headers = {
-        'Authorization': `Bearer ${process.env.FISH_AUDIO_TOKEN}`,
-        'Content-Type': 'application/msgpack',
-        'model': 's1',
-        'developer-id': 'ee3ddd082fe14364a30abefadd797dac',
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'model': model || 's2.1-pro-free',
     };
 
     let prosody: any = null;
@@ -93,22 +97,60 @@ export async function genVoiceFishAudio(text: string, voiceOption: VoiceOption):
     // console.log(JSON.stringify(request))
     // return Buffer.from([])
 
-    const response = await getAxiosInstance().post(url, msgpack.encode(request), {
+    const response = await getAxiosInstance().post(url, request, {
         headers,
         responseType: 'arraybuffer',
+        validateStatus: () => true,
     });
 
     if (response.status !== 200) {
-        switch (response.status) {
-            case 400:
-                console.log(JSON.stringify(request))
-                throw new Error(`HTTP error: status code ${response.status}, ${response.data}`);
-            default:
-                throw new Error(`HTTP error: status code ${response.status}`);
-        }
+        throw describeApiFailure(response.status, 'Fish Audio TTS');
     }
 
     return {audio: Buffer.from(response.data), format: 'mp3'};
+}
+
+async function wavToMp3(audio: Buffer): Promise<Buffer> {
+    const dir = await mkdtemp(path.join(tmpdir(), 'twocast-gemini-'));
+    try {
+        const input = path.join(dir, 'voice.wav');
+        const output = path.join(dir, 'voice.mp3');
+        await writeFile(input, audio);
+        const binary = process.env.FFMPEG_PATH || (process.env.VERCEL === '1'
+            ? path.join(process.cwd(), 'node_modules/ffmpeg-static/ffmpeg') : ffmpegPath);
+        if (!binary) throw new Error('FFmpeg 不可用');
+        await new Promise<void>((resolve, reject) => {
+            const child = spawn(binary, ['-hide_banner', '-loglevel', 'error', '-y', '-i', input,
+                '-c:a', 'libmp3lame', '-b:a', '128k', output]);
+            let stderr = '';
+            child.stderr.on('data', chunk => { stderr += String(chunk).slice(0, 300) });
+            child.on('error', reject);
+            child.on('close', code => code === 0 ? resolve() : reject(new Error(`Gemini 音频转换失败: ${stderr}`)));
+        });
+        return await readFile(output);
+    } finally {
+        await rm(dir, { recursive: true, force: true });
+    }
+}
+
+export async function genVoiceGemini(text: string, voiceOption: VoiceOption): Promise<AudioResult> {
+    const [token, model] = await Promise.all([getApiSetting('GEMINI_TTS_API_KEY'), getApiSetting('GEMINI_TTS_MODEL')]);
+    if (!token) throw new Error('Gemini TTS API Key 尚未配置');
+    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions', {
+        method: 'POST',
+        headers: { 'x-goog-api-key': token, 'content-type': 'application/json' },
+        body: JSON.stringify({ model: model || 'gemini-3.8-flash-lite-tts',
+            input: [{ type: 'user_input', content: [{ type: 'text', text }] }],
+            response_format: { type: 'audio' },
+            generation_config: { speech_config: [{ voice: voiceOption.id }] },
+        }),
+    });
+    if (!response.ok) throw describeApiFailure(response.status, 'Gemini TTS');
+    const result = await response.json();
+    const encoded = result.steps?.flatMap((step: { content?: { data?: string }[] }) => step.content || [])
+        .find((part: { data?: string }) => part.data)?.data;
+    if (!encoded) throw new Error('Gemini TTS 未返回音频');
+    return { audio: await wavToMp3(Buffer.from(encoded, 'base64')), format: 'mp3' };
 }
 
 export interface GenPartsParams {

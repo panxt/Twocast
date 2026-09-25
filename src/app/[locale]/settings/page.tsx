@@ -6,11 +6,14 @@ const fields = [
   ['LLM_CHAT_URL', '聊天接口 URL'], ['LLM_CHAT_MODEL', '聊天模型'], ['LLM_API_KEY', '聊天 API Key'],
   ['LLM_SEARCH_URL', '搜索接口 URL'], ['LLM_SEARCH_MODEL', '搜索模型'], ['LLM_SEARCH_API_KEY', '搜索 API Key'],
   ['MINIMAX_GROUP_ID', 'MiniMax Group ID'], ['MINIMAX_TOKEN', 'MiniMax TTS API Key'],
+  ['FISH_AUDIO_TOKEN', 'Fish Audio API Key'], ['FISH_AUDIO_MODEL', 'Fish Audio 模型（默认 s2.1-pro-free）'],
+  ['GEMINI_TTS_API_KEY', 'Gemini TTS API Key'], ['GEMINI_TTS_MODEL', 'Gemini TTS 模型（默认 gemini-3.8-flash-lite-tts）'],
 ] as const
-const secrets = new Set(['LLM_API_KEY', 'LLM_SEARCH_API_KEY', 'MINIMAX_TOKEN'])
+const secrets = new Set(['LLM_API_KEY', 'LLM_SEARCH_API_KEY', 'MINIMAX_TOKEN', 'FISH_AUDIO_TOKEN', 'GEMINI_TTS_API_KEY'])
 type Grant = { id: number; userId: number | null; inviteCodeId: number | null; capability: string; maxEpisodes: number; usedEpisodes: number }
 type User = { id: number; displayName: string | null; inviteCodeId: number | null; teamAccess: boolean; expiresAt: string }
 type ApiShare = { id: number; ownerUserId: number; recipientUserId: number; capability: 'llm' | 'tts';
+  delegatedByUserId: number | null; parentShareId: number | null; allowReshare: boolean;
   maxEpisodes: number; usedEpisodes: number; active: boolean }
 type Code = { id: number; label: string | null; usedCount: number; maxUses: number;
   dailyMaxUses: number | null; dailyUsedCount: number; dailyUsedOn: string | null;
@@ -43,6 +46,7 @@ export default function SettingsPage() {
   const [shareUsers, setShareUsers] = useState<{ id: number; displayName: string | null }[]>([])
   const [currentUserId, setCurrentUserId] = useState(0)
   const [shareRecipient, setShareRecipient] = useState('')
+  const [shareSource, setShareSource] = useState('')
   const [shareCapability, setShareCapability] = useState<'llm' | 'tts'>('llm')
   const [shareEpisodes, setShareEpisodes] = useState(3)
   const [shareLimits, setShareLimits] = useState<Record<number, number>>({})
@@ -193,15 +197,17 @@ export default function SettingsPage() {
     const response = await fetch('/api/user/api-shares', { method: 'POST',
       headers: { 'content-type': 'application/json' }, body: JSON.stringify({
         recipientUserId: Number(shareRecipient), capability: shareCapability, maxEpisodes: shareEpisodes,
+        parentShareId: shareSource ? Number(shareSource) : null,
       }) })
     const data = await response.json()
     setMessage(response.ok ? '已分享调用额度；对方看不到你的密钥' : data.error || '分享失败')
     if (response.ok) await loadShares()
   }
-  async function updateShare(share: ApiShare, active = share.active) {
+  async function updateShare(share: ApiShare, active = share.active, allowReshare = share.allowReshare) {
     const response = await fetch('/api/user/api-shares', { method: 'PATCH',
       headers: { 'content-type': 'application/json' }, body: JSON.stringify({
         id: share.id, active, maxEpisodes: shareLimits[share.id],
+        ...(admin || share.ownerUserId === currentUserId ? { allowReshare } : {}),
       }) })
     const data = await response.json()
     setMessage(response.ok ? '分享设置已更新' : data.error || '更新失败')
@@ -305,30 +311,38 @@ export default function SettingsPage() {
     </section>
     <section className="space-y-3 rounded-xl border p-5">
       <h2 className="text-lg font-semibold">成员 API 分享</h2>
-      <p className="text-sm text-gray-500">分享的是服务端调用额度，不显示或发送密钥明文。你可以随时暂停分享或调整总期数；自己的密钥停用后分享也会停止。</p>
+      <p className="text-sm text-gray-500">分享的是服务端调用额度，不显示或发送密钥明文。原持有人可开启转分享；上游暂停、额度用完或密钥停用时，下游也会停止。</p>
       {shareError && <p role="alert" className="text-sm text-red-600">{shareError} <button onClick={loadShares} className="underline">重试</button></p>}
       {!admin && <div className="flex flex-wrap gap-2">
+        <select aria-label="分享来源" value={shareSource} onChange={event => setShareSource(event.target.value)} className="rounded border px-2 py-2 dark:bg-gray-800">
+          <option value="">我的私有 API</option>
+          {shares.filter(share => share.recipientUserId === currentUserId && share.capability === shareCapability && share.allowReshare && share.active && share.usedEpisodes < share.maxEpisodes)
+            .map(share => <option key={share.id} value={share.id}>获准转分享 #{share.id}（剩余 {share.maxEpisodes - share.usedEpisodes} 期）</option>)}
+        </select>
         <select aria-label="分享给成员" value={shareRecipient} onChange={event => setShareRecipient(event.target.value)} className="rounded border px-2 py-2 dark:bg-gray-800">
           <option value="">选择接收成员</option>
           {shareUsers.filter(item => item.id !== currentUserId).map(item => <option key={item.id} value={item.id}>{item.displayName || `用户 #${item.id}`}</option>)}
         </select>
-        <select aria-label="分享能力" value={shareCapability} onChange={event => setShareCapability(event.target.value as 'llm' | 'tts')}
-          className="rounded border px-2 py-2 dark:bg-gray-800"><option value="llm">大模型</option><option value="tts">MiniMax 语音</option></select>
+        <select aria-label="分享能力" value={shareCapability} onChange={event => { setShareCapability(event.target.value as 'llm' | 'tts'); setShareSource('') }}
+          className="rounded border px-2 py-2 dark:bg-gray-800"><option value="llm">大模型</option><option value="tts">语音（已配置的平台）</option></select>
         <label className="text-sm">总期数<input type="number" min="1" max="1000" value={shareEpisodes}
           onChange={event => setShareEpisodes(Number(event.target.value))} className="ml-2 w-20 rounded border px-2 py-2 dark:bg-gray-800" /></label>
         <button onClick={createShare} disabled={!shareRecipient} className="rounded bg-indigo-600 px-4 py-2 text-sm text-white disabled:opacity-50">分享额度</button>
       </div>}
       <div className="divide-y text-sm dark:divide-gray-700">{shares.length === 0 && !shareError && <p className="py-2 text-gray-500">暂无成员 API 分享</p>}
         {shares.map(share => <div key={share.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
-          <span>{shareUsers.find(item => item.id === share.ownerUserId)?.displayName || `用户 #${share.ownerUserId}`} → {shareUsers.find(item => item.id === share.recipientUserId)?.displayName || `用户 #${share.recipientUserId}`}
-            {' · '}{share.capability === 'llm' ? '大模型' : '语音'} · 已用 {share.usedEpisodes}/{share.maxEpisodes} 期 · {share.active ? '启用' : '暂停'}</span>
-          {(admin || share.ownerUserId === currentUserId) && <div className="flex items-center gap-2">
+          <span>{shareUsers.find(item => item.id === share.delegatedByUserId)?.displayName || `用户 #${share.delegatedByUserId || share.ownerUserId}`} → {shareUsers.find(item => item.id === share.recipientUserId)?.displayName || `用户 #${share.recipientUserId}`}
+            {' · '}{share.capability === 'llm' ? '大模型' : '语音'} · 已用 {share.usedEpisodes}/{share.maxEpisodes} 期 · {share.active ? '启用' : '暂停'}
+            {share.parentShareId && ` · 来自分享 #${share.parentShareId}`}{share.allowReshare && ' · 可转分享'}</span>
+          {(admin || share.ownerUserId === currentUserId || share.delegatedByUserId === currentUserId) && <div className="flex items-center gap-2">
             <input aria-label={`分享 #${share.id} 总期数`} type="number" min={share.usedEpisodes || 1} max="1000"
               value={shareLimits[share.id] ?? share.maxEpisodes}
               onChange={event => setShareLimits({ ...shareLimits, [share.id]: Number(event.target.value) })}
               className="w-20 rounded border px-2 py-1 dark:bg-gray-800" />
             <button onClick={() => updateShare(share)} className="rounded border px-2 py-1">保存额度</button>
             <button onClick={() => updateShare(share, !share.active)} className="rounded border px-2 py-1">{share.active ? '暂停' : '启用'}</button>
+            {(admin || share.ownerUserId === currentUserId) && <button onClick={() => updateShare(share, share.active, !share.allowReshare)} className="rounded border px-2 py-1">
+              {share.allowReshare ? '关闭转分享' : '允许转分享'}</button>}
           </div>}
         </div>)}
       </div>

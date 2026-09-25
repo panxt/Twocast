@@ -2,13 +2,15 @@ import 'server-only'
 import { createCipheriv, createDecipheriv, randomBytes } from 'crypto'
 import { and, eq, gt, inArray } from 'drizzle-orm'
 import { getDb } from '@/db/db'
-import { appSettingsTable, memberApiSharesTable, sessionsTable, userApiSettingsTable } from '@/db/schema'
+import { appSettingsTable, sessionsTable, userApiSettingsTable } from '@/db/schema'
 import { currentApiContext } from './api-context'
+import { getShareChain } from './member-share-chain'
 
 export const SETTING_KEYS = [
   'LLM_CHAT_URL', 'LLM_CHAT_MODEL', 'LLM_API_KEY',
   'LLM_SEARCH_URL', 'LLM_SEARCH_MODEL', 'LLM_SEARCH_API_KEY',
   'MINIMAX_GROUP_ID', 'MINIMAX_TOKEN',
+  'FISH_AUDIO_TOKEN', 'FISH_AUDIO_MODEL', 'GEMINI_TTS_API_KEY', 'GEMINI_TTS_MODEL',
   'API_LLM_ENABLED', 'API_TTS_ENABLED',
 ] as const
 export type SettingKey = typeof SETTING_KEYS[number]
@@ -75,22 +77,22 @@ export async function setUserSetting(userId: number, key: SettingKey, value: str
 
 export async function getApiSetting(key: SettingKey): Promise<string> {
   const context = currentApiContext()
-  const capability = key.startsWith('MINIMAX_') ? 'tts' : 'llm'
+  const capability = key.startsWith('MINIMAX_') || key.startsWith('FISH_AUDIO_') || key.startsWith('GEMINI_TTS_') ? 'tts' : 'llm'
   if (context?.access[capability] === 'own') return getUserSetting(context.userId, key)
   if (context?.access[capability] === 'member') {
     const ownerId = context.keyOwners?.[capability]
     const shareId = context.keyShareIds?.[capability]
     if (!ownerId || !shareId) throw new Error('成员 API 分享已失效')
-    const [share] = await getDb().select({ active: memberApiSharesTable.active })
-      .from(memberApiSharesTable).where(and(eq(memberApiSharesTable.id, shareId),
-        eq(memberApiSharesTable.ownerUserId, ownerId),
-        eq(memberApiSharesTable.recipientUserId, context.userId),
-        eq(memberApiSharesTable.capability, capability))).limit(1)
+    const chain = await getShareChain(shareId, false)
+    const share = chain?.[0]
     const [owner] = await getDb().select({ id: sessionsTable.id }).from(sessionsTable).where(and(
       eq(sessionsTable.id, ownerId), eq(sessionsTable.role, 'member'),
       gt(sessionsTable.expiresAt, new Date()))).limit(1)
     const toggle = capability === 'llm' ? 'API_LLM_ENABLED' : 'API_TTS_ENABLED'
-    if (!share?.active || !owner || await getUserSetting(ownerId, toggle) === '0') throw new Error('成员 API 分享已停用')
+    if (!share || share.ownerUserId !== ownerId || share.recipientUserId !== context.userId ||
+      share.capability !== capability || !owner || await getUserSetting(ownerId, toggle) === '0') {
+      throw new Error('成员 API 分享已停用')
+    }
     return getUserSetting(ownerId, key)
   }
   return getSetting(key)

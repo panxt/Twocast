@@ -1,16 +1,13 @@
 import { getAxiosInstance } from "@/utils/http";
-import { getCache, setCache } from "@/utils/redis";
 import { respSuccess } from "@/utils/resp";
-import { NextRequest } from "next/server";
 import { getSetting } from '@/lib/settings';
 import { getUserSetting } from '@/lib/settings';
 import { availableTtsAccess } from '@/lib/api-access';
 import { getCurrentUser } from '@/utils/user';
 
-export async function GET(req: NextRequest) {
+export async function GET() {
     const user = await getCurrentUser()
     if (!user.userEmail) return new Response('Unauthorized', { status: 401 })
-    const languages = req.nextUrl.searchParams.get('languages')?.split(',') || []
     const ret = {
     }
     const access = await availableTtsAccess(user)
@@ -18,59 +15,11 @@ export async function GET(req: NextRequest) {
         const token = access.error ? '' : access.source === 'own'
             ? await getUserSetting(user.userId, 'MINIMAX_TOKEN') : access.source === 'member' && access.ownerUserId
               ? await getUserSetting(access.ownerUserId, 'MINIMAX_TOKEN') : await getSetting('MINIMAX_TOKEN')
-        ret['minimaxi'] = await getMinimaxVoices(token)
+        try { ret['minimaxi'] = await getMinimaxVoices(token) }
+        catch (error) { console.warn('MiniMax voice list unavailable:', error) }
     }
-    if (process.env.GEMINI_ENABLED === '1') {
-        ret['gemini'] = geminiVoices
-    }
-    if (process.env.FISH_AUDIO_ENABLED === '1') {
-        ret['fish_audio'] = await getFishAudioVoices(languages)
-    }
+    ret['gemini'] = geminiVoices
     return respSuccess(ret)
-}
-
-async function getFishAudioVoices(languages: string[] = [], page_size: number = 100) {
-    // api doc: https://docs.fish.audio/api-reference/endpoint/model/list-models#parameter-language
-    const cacheKey = 'fish_audio_voices_' + languages.join(',') + '_' + page_size
-    const cache = await getCache(cacheKey)
-    if (cache) {
-        return cache
-    }
-    const u = new URL('https://api.fish.audio/model')
-    const params = {
-        // 'language': languages.join(','),
-        // 'title_language': languages.join(','),
-        page_size: page_size.toString(),
-    }
-    if (languages.length > 0) {
-        params['language'] = languages.join(',')
-        params['title_language'] = languages.join(',')
-    }
-    u.search = new URLSearchParams(params).toString()
-    const headers = {
-        'Authorization': `Bearer ${process.env.FISH_AUDIO_TOKEN}`
-    }
-    console.log(u.toString())
-    const response = await getAxiosInstance().get(u.toString(), {
-        headers: headers,
-        timeout: 10000,
-    })
-    if (response.status != 200) {
-        throw new Error(`Failed to get fish audio voices, status: ${response.status}, body: ${response.data?.slice(0, 100)}`)
-    }
-    const jd = response.data
-    // console.log(jd.items[0])
-    const ret = jd.items.map(v => {
-        const lang = v.languages.join('-')
-        return {
-            id: v._id,
-            name: lang + '-' + v.title,
-            description: v.description,
-            sample: v.samples[0]?.audio
-        }
-    })
-    await setCache(cacheKey, ret, 60 * 60 * 24)
-    return ret
 }
 
 async function getMinimaxVoices(token: string) {

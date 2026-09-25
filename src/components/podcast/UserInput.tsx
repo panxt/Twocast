@@ -60,11 +60,8 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
 
   const platforms: OptionItem[] = [
     { id: Platform.Minimax, label: 'Minimax', icon: '🤖' },
-    ...(process.env.NEXT_PUBLIC_VERCEL_BETA === '1' ? [] : [
-      { id: Platform.Gemini, label: 'Gemini', icon: '🤖' },
-      { id: Platform.FishAudio, label: 'Fish Audio', icon: '🐟' },
-      { id: Platform.FishAudio + '_custom', label: 'Fish Audio (Custom)', icon: '🐟' },
-    ]),
+    { id: Platform.Gemini, label: 'Gemini TTS', icon: '🤖' },
+    { id: Platform.FishAudio, label: 'Fish Audio', icon: '🐟' },
   ]
   const lngOpt2OptionItem = (lngs: any[]) => {
     const audoOpt = [{
@@ -90,8 +87,7 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
   const platformTips = {
     [Platform.Minimax]: 'https://platform.minimaxi.com/examination-center/voice-experience-center/t2a_v2',
     // [Platform.Gemini]: 'Gemini',
-    [Platform.FishAudio]: 'http://bit.ly/4k7AXHt',
-    [Platform.FishAudio + '_custom']: 'http://bit.ly/4k7AXHt',
+    [Platform.FishAudio]: 'https://fish.audio/developers/',
   }
 
   useEffect(() => {
@@ -115,16 +111,16 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
   }, [voiceReload]);
 
   useEffect(() => {
-    fetch('/api/user/settings').then(response => response.json()).then(data => {
+    fetch(`/api/user/settings?platform=${encodeURIComponent(platform)}`).then(response => response.json()).then(data => {
       setApiWarning(data.access?.llm?.error || data.access?.tts?.error || '');
     }).catch(() => undefined);
-  }, []);
+  }, [platform]);
 
   useEffect(() => {
     if (platform) {
       // setVoiceId_1('');
       // setVoiceId_2('');
-      if (platform.includes('custom')) {
+      if (platform === Platform.FishAudio) {
         setSelectType(SelectType.Input);
       } else {
         setSelectType(SelectType.Select);

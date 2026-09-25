@@ -4,6 +4,8 @@ import { getDb } from '@/db/db'
 import { apiGrantsTable, memberApiSharesTable, sessionsTable } from '@/db/schema'
 import { getSettings, getUserSettings, SettingKey, ApiToggleKey } from './settings'
 import { ApiAccess, ApiSource } from './api-context'
+import { getShareChain } from './member-share-chain'
+import { Platform } from './podcast/types'
 
 type User = { userId: number; inviteCodeId: number | null; isAdmin: boolean }
 type Capability = 'llm' | 'tts'
@@ -19,21 +21,27 @@ async function enabled(userId: number, capability: Capability, own: boolean) {
   return values[key] !== '0'
 }
 
-export async function availableApiAccess(user: User, needsSearch: boolean) {
+export const ttsSettingKeys: Record<Platform, SettingKey[]> = {
+  [Platform.Minimax]: ['MINIMAX_GROUP_ID', 'MINIMAX_TOKEN'],
+  [Platform.FishAudio]: ['FISH_AUDIO_TOKEN'],
+  [Platform.Gemini]: ['GEMINI_TTS_API_KEY'],
+}
+
+export async function availableApiAccess(user: User, needsSearch: boolean, platform: Platform = Platform.Minimax) {
   const llmKeys: SettingKey[] = ['LLM_CHAT_URL', 'LLM_CHAT_MODEL', 'LLM_API_KEY']
   if (needsSearch) llmKeys.push('LLM_SEARCH_URL', 'LLM_SEARCH_MODEL', 'LLM_SEARCH_API_KEY')
-  const ttsKeys: SettingKey[] = ['MINIMAX_GROUP_ID', 'MINIMAX_TOKEN']
+  const ttsKeys = ttsSettingKeys[platform]
   const selection = await Promise.all([
     selectCapability(user, 'llm', llmKeys), selectCapability(user, 'tts', ttsKeys),
   ])
   return { llm: selection[0], tts: selection[1] }
 }
 
-export async function availableTtsAccess(user: User) {
-  return selectCapability(user, 'tts', ['MINIMAX_GROUP_ID', 'MINIMAX_TOKEN'])
+export async function availableTtsAccess(user: User, platform: Platform = Platform.Minimax) {
+  return selectCapability(user, 'tts', ttsSettingKeys[platform])
 }
 
-type Selection = { source: ApiSource; grantId?: number; memberShareId?: number; ownerUserId?: number; error?: string }
+type Selection = { source: ApiSource; grantId?: number; memberShareId?: number; memberShareChainIds?: number[]; ownerUserId?: number; error?: string }
 
 async function selectCapability(user: User, capability: Capability, keys: SettingKey[]): Promise<Selection> {
   if (user.isAdmin) {
@@ -50,12 +58,15 @@ async function selectCapability(user: User, capability: Capability, keys: Settin
     sql`${memberApiSharesTable.usedEpisodes} < ${memberApiSharesTable.maxEpisodes}`,
   )).orderBy(memberApiSharesTable.id)
   for (const share of shares) {
+    const chain = await getShareChain(share.id)
+    if (!chain) continue
     const [owner] = await getDb().select({ id: sessionsTable.id }).from(sessionsTable).where(and(
       eq(sessionsTable.id, share.ownerUserId), gt(sessionsTable.expiresAt, new Date()),
       eq(sessionsTable.role, 'member'),
     )).limit(1)
     if (owner && await enabled(owner.id, capability, true) && await configured(owner.id, keys, true)) {
-      return { source: 'member', memberShareId: share.id, ownerUserId: owner.id }
+      return { source: 'member', memberShareId: share.id,
+        memberShareChainIds: chain.map(item => item.id), ownerUserId: owner.id }
     }
   }
   const grants = await getDb().select().from(apiGrantsTable).where(and(
@@ -75,25 +86,27 @@ async function selectCapability(user: User, capability: Capability, keys: Settin
     : `未获管理员共享${capability === 'llm' ? '大模型' : '语音'} API 授权；请配置自己的 API 或联系管理员` }
 }
 
-export async function reserveApiAccess(user: User, needsSearch: boolean): Promise<{
+export async function reserveApiAccess(user: User, needsSearch: boolean, platform: Platform = Platform.Minimax): Promise<{
   access: ApiAccess; grantIds: number[]; memberShareIds: number[];
   keyOwners: { llm?: number; tts?: number }; keyShareIds: { llm?: number; tts?: number }
 }> {
-  const selection = await availableApiAccess(user, needsSearch)
+  const selection = await availableApiAccess(user, needsSearch, platform)
   if (selection.llm.error || selection.tts.error) throw new Error([selection.llm.error, selection.tts.error].filter(Boolean).join('；'))
   const reserved: number[] = []
   const reservedShares: number[] = []
   try {
     for (const item of [selection.llm, selection.tts]) {
       if (item.memberShareId) {
-        const rows = await getDb().update(memberApiSharesTable)
-          .set({ usedEpisodes: sql`${memberApiSharesTable.usedEpisodes} + 1` })
-          .where(and(eq(memberApiSharesTable.id, item.memberShareId),
-            eq(memberApiSharesTable.active, true),
-            sql`${memberApiSharesTable.usedEpisodes} < ${memberApiSharesTable.maxEpisodes}`))
-          .returning({ id: memberApiSharesTable.id })
-        if (!rows[0]) throw new Error('成员分享 API 额度刚刚用完，请重试')
-        reservedShares.push(item.memberShareId)
+        for (const id of item.memberShareChainIds || [item.memberShareId]) {
+          const rows = await getDb().update(memberApiSharesTable)
+            .set({ usedEpisodes: sql`${memberApiSharesTable.usedEpisodes} + 1` })
+            .where(and(eq(memberApiSharesTable.id, id),
+              eq(memberApiSharesTable.active, true),
+              sql`${memberApiSharesTable.usedEpisodes} < ${memberApiSharesTable.maxEpisodes}`))
+            .returning({ id: memberApiSharesTable.id })
+          if (!rows[0]) throw new Error('成员分享 API 额度刚刚用完，请重试')
+          reservedShares.push(id)
+        }
       }
       if (!item.grantId) continue
       const rows = await getDb().update(apiGrantsTable).set({ usedEpisodes: sql`${apiGrantsTable.usedEpisodes} + 1` })

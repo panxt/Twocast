@@ -5,13 +5,14 @@ import { userApiSettingsTable } from '@/db/schema'
 import { getCurrentUser } from '@/utils/user'
 import { getUserSettings, setUserSetting, SETTING_KEYS, SettingKey } from '@/lib/settings'
 import { availableApiAccess } from '@/lib/api-access'
+import { Platform } from '@/lib/podcast/types'
 
-const SECRETS = new Set(['LLM_API_KEY', 'LLM_SEARCH_API_KEY', 'MINIMAX_TOKEN'])
+const SECRETS = new Set(['LLM_API_KEY', 'LLM_SEARCH_API_KEY', 'MINIMAX_TOKEN', 'FISH_AUDIO_TOKEN', 'GEMINI_TTS_API_KEY'])
 const HOSTS = new Set(['api.minimaxi.com', 'api.minimax.io', 'api.openai.com',
   'openrouter.ai', 'api.deepseek.com', 'api.x.ai', 'api.moonshot.cn',
   'dashscope.aliyuncs.com', 'generativelanguage.googleapis.com'])
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const user = await getCurrentUser()
   if (!user.userEmail) return NextResponse.json({ error: '请先登录' }, { status: 401 })
   const values = await getUserSettings(user.userId, SETTING_KEYS)
@@ -19,7 +20,10 @@ export async function GET() {
   for (const key of SETTING_KEYS) {
     settings[key] = SECRETS.has(key) ? Boolean(values[key]) : values[key]
   }
-  const access = await availableApiAccess(user, false)
+  const requestedPlatform = request.nextUrl.searchParams.get('platform')
+  const platform = Object.values(Platform).includes(requestedPlatform as Platform)
+    ? requestedPlatform as Platform : Platform.Minimax
+  const access = await availableApiAccess(user, false, platform)
   return NextResponse.json({ settings, access })
 }
 
@@ -44,6 +48,12 @@ export async function PUT(request: NextRequest) {
     }
     if (typeof value !== 'string' || value.length > 2048) return NextResponse.json({ error: `${key} 格式无效` }, { status: 400 })
     const trimmed = value.trim()
+    if (key === 'FISH_AUDIO_MODEL' && trimmed && !['s1', 's2-pro', 's2.1-pro', 's2.1-pro-free'].includes(trimmed)) {
+      return NextResponse.json({ error: '不支持的 Fish Audio 模型' }, { status: 400 })
+    }
+    if (key === 'GEMINI_TTS_MODEL' && trimmed && !['gemini-3.8-flash-tts', 'gemini-3.8-flash-lite-tts'].includes(trimmed)) {
+      return NextResponse.json({ error: '不支持的 Gemini TTS 模型' }, { status: 400 })
+    }
     if (!trimmed && SECRETS.has(key)) continue
     if (key.endsWith('_URL') && trimmed) {
       try {

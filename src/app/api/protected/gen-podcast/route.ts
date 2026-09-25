@@ -49,7 +49,7 @@ export async function POST(req: Request) {
   const file = formData.get('file')
   const language = formData.get('language')
   if (!Object.values(PodcastInputType).includes(type as PodcastInputType) ||
-      platform !== Platform.Minimax || typeof voice_id_1 !== 'string' || !voice_id_1 ||
+      ![Platform.Minimax, Platform.FishAudio, Platform.Gemini].includes(platform as Platform) || typeof voice_id_1 !== 'string' || !voice_id_1 ||
       typeof voice_id_2 !== 'string' || !voice_id_2) {
     return respErr('输入类型或语音配置无效')
   }
@@ -94,7 +94,7 @@ export async function POST(req: Request) {
 
   let reservation: Awaited<ReturnType<typeof reserveApiAccess>>
   try {
-    reservation = await reserveApiAccess(user, type === PodcastInputType.Topic)
+    reservation = await reserveApiAccess(user, type === PodcastInputType.Topic, platform as Platform)
   } catch (error) {
     return new Response(JSON.stringify({ error: error instanceof Error ? error.message : 'API 权限不足' }),
       { status: 403, headers: { 'content-type': 'application/json' } })

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/utils/user'
 import { getSettings, setSetting, SETTING_KEYS, SettingKey } from '@/lib/settings'
 
-const SECRET_KEYS = new Set(['LLM_API_KEY', 'LLM_SEARCH_API_KEY', 'MINIMAX_TOKEN'])
+const SECRET_KEYS = new Set(['LLM_API_KEY', 'LLM_SEARCH_API_KEY', 'MINIMAX_TOKEN', 'FISH_AUDIO_TOKEN', 'GEMINI_TTS_API_KEY'])
 
 export async function GET() {
   if (!(await getCurrentUser()).isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
@@ -24,6 +24,12 @@ export async function PUT(request: NextRequest) {
     const value = input[key]
     if (typeof value !== 'string' || value.length > 2048) return NextResponse.json({ error: `Invalid ${key}` }, { status: 400 })
     const trimmed = value.trim()
+    if (key === 'FISH_AUDIO_MODEL' && trimmed && !['s1', 's2-pro', 's2.1-pro', 's2.1-pro-free'].includes(trimmed)) {
+      return NextResponse.json({ error: 'Invalid Fish Audio model' }, { status: 400 })
+    }
+    if (key === 'GEMINI_TTS_MODEL' && trimmed && !['gemini-3.8-flash-tts', 'gemini-3.8-flash-lite-tts'].includes(trimmed)) {
+      return NextResponse.json({ error: 'Invalid Gemini TTS model' }, { status: 400 })
+    }
     if ((key === 'API_LLM_ENABLED' || key === 'API_TTS_ENABLED') && trimmed !== '0' && trimmed !== '1') {
       return NextResponse.json({ error: `Invalid ${key}` }, { status: 400 })
     }
