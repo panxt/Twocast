@@ -1,6 +1,6 @@
 'use client';
 
-import { PlayIcon, ClockIcon, ArrowDownTrayIcon } from '@heroicons/react/24/solid';
+import { PlayIcon, PauseIcon, ClockIcon, ArrowDownTrayIcon } from '@heroicons/react/24/solid';
 import { useAudioPlayer } from '@/contexts/AudioPlayerContext';
 import { useTranslation } from 'react-i18next';
 import { formatDuration } from '@/utils/time';
@@ -16,7 +16,7 @@ interface PodcastPlayerProps {
 }
 
 export default function PodcastPlayer({ audioUrl, downloadUrl, title, artist, thumbnail, duration, lyricsUrl }: PodcastPlayerProps) {
-  const { play, currentTrack, isPlaying, isLoading } = useAudioPlayer();
+  const { play, pause, resume, currentTrack, isPlaying, isLoading } = useAudioPlayer();
   const {t} = useTranslation('podcast');
 
   // 检查是否是当前正在播放的音频
@@ -25,6 +25,12 @@ export default function PodcastPlayer({ audioUrl, downloadUrl, title, artist, th
   // 开始播放
   const handlePlay = () => {
     if (!audioUrl) return; // 如果没有音频URL，则不执行任何操作
+
+    if (isCurrentTrack) {
+      if (isPlaying || isLoading) pause();
+      else resume();
+      return;
+    }
 
     play({
       id: audioUrl, // 使用URL作为唯一ID
@@ -77,7 +83,8 @@ export default function PodcastPlayer({ audioUrl, downloadUrl, title, artist, th
           {/* 播放按钮 */}
           <button
             onClick={handlePlay}
-            disabled={!audioUrl || (isLoading && isCurrentTrack)}
+            disabled={!audioUrl}
+            aria-label={isCurrentTrack && (isPlaying || isLoading) ? '暂停播放' : '播放音频'}
             className="group relative w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {/* 按钮内部光泽 */}
@@ -85,6 +92,8 @@ export default function PodcastPlayer({ audioUrl, downloadUrl, title, artist, th
             
             {isLoading && isCurrentTrack ? (
               <div className="w-6 h-6 sm:w-8 sm:h-8 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+            ) : isPlaying && isCurrentTrack ? (
+              <PauseIcon className="w-6 h-6 sm:w-8 sm:h-8 text-white relative z-10" />
             ) : (
               <PlayIcon className="w-6 h-6 sm:w-8 sm:h-8 text-white relative z-10 ml-0.5" />
             )}

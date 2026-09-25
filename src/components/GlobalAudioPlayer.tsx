@@ -1,10 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { 
-  PlayIcon, 
-  PauseIcon, 
-  SpeakerWaveIcon, 
+import {
+  PlayIcon,
+  PauseIcon,
+  SpeakerWaveIcon,
   SpeakerXMarkIcon,
   XMarkIcon,
   ChevronUpIcon,
@@ -45,7 +45,7 @@ export default function GlobalAudioPlayer() {
 
   // 播放/暂停切换
   const handleTogglePlay = () => {
-    if (isPlaying) {
+    if (isPlaying || isLoading) {
       pause();
     } else {
       resume();
@@ -76,7 +76,7 @@ export default function GlobalAudioPlayer() {
         <div className={`relative transition-all duration-300 ${isExpanded ? 'h-0 overflow-hidden' : 'h-16 sm:h-20'}`}>
           {/* 进度条 */}
           <div className="absolute top-0 left-0 w-full h-0.5">
-            <div 
+            <div
               className="h-full bg-gradient-to-r from-indigo-500 to-purple-600 transition-all duration-100"
               style={{ width: `${duration ? (currentTime / duration) * 100 : 0}%` }}
             />
@@ -86,8 +86,8 @@ export default function GlobalAudioPlayer() {
             {/* 左侧：播放信息 */}
             <div className="flex items-center space-x-3 flex-1 min-w-0">
               {currentTrack.thumbnail && (
-                <img 
-                  src={currentTrack.thumbnail} 
+                <img
+                  src={currentTrack.thumbnail}
                   alt={currentTrack.title}
                   className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg object-cover shadow-md"
                 />
@@ -114,7 +114,7 @@ export default function GlobalAudioPlayer() {
             <div className="flex items-center space-x-2 sm:space-x-4">
               <button
                 onClick={handleTogglePlay}
-                disabled={isLoading}
+                aria-label={isPlaying || isLoading ? '暂停播放' : '播放音频'}
                 className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center hover:scale-105 transition-all duration-300 shadow-lg disabled:opacity-50"
               >
                 {isLoading ? (
@@ -222,8 +222,8 @@ export default function GlobalAudioPlayer() {
             {/* 播放信息 */}
             <div className="flex items-center space-x-4">
               {currentTrack.thumbnail && (
-                <img 
-                  src={currentTrack.thumbnail} 
+                <img
+                  src={currentTrack.thumbnail}
                   alt={currentTrack.title}
                   className="w-16 h-16 rounded-xl object-cover shadow-lg"
                 />
@@ -258,10 +258,10 @@ export default function GlobalAudioPlayer() {
                   onChange={handleSeek}
                   className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full appearance-none cursor-pointer slider"
                   style={{
-                    background: `linear-gradient(to right, 
-                      rgb(99 102 241) 0%, 
-                      rgb(168 85 247) ${duration ? (currentTime / duration) * 100 : 0}%, 
-                      rgb(229 231 235) ${duration ? (currentTime / duration) * 100 : 0}%, 
+                    background: `linear-gradient(to right,
+                      rgb(99 102 241) 0%,
+                      rgb(168 85 247) ${duration ? (currentTime / duration) * 100 : 0}%,
+                      rgb(229 231 235) ${duration ? (currentTime / duration) * 100 : 0}%,
                       rgb(229 231 235) 100%)`
                   }}
                 />
@@ -318,7 +318,7 @@ export default function GlobalAudioPlayer() {
               <div className="flex items-center justify-center space-x-6">
                 <button
                   onClick={handleTogglePlay}
-                  disabled={isLoading}
+                  aria-label={isPlaying || isLoading ? '暂停播放' : '播放音频'}
                   className="w-14 h-14 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center hover:scale-105 transition-all duration-300 shadow-lg disabled:opacity-50"
                 >
                   {isLoading ? (
@@ -373,11 +373,11 @@ export default function GlobalAudioPlayer() {
           box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
           transition: transform 0.2s;
         }
-        
+
         .slider::-webkit-slider-thumb:hover {
           transform: scale(1.2);
         }
-        
+
         .slider-sm::-webkit-slider-thumb {
           appearance: none;
           width: 12px;
@@ -387,7 +387,7 @@ export default function GlobalAudioPlayer() {
           cursor: pointer;
           box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
         }
-        
+
         .slider::-moz-range-thumb {
           width: 16px;
           height: 16px;
@@ -397,7 +397,7 @@ export default function GlobalAudioPlayer() {
           border: none;
           box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
         }
-        
+
         .slider-sm::-moz-range-thumb {
           width: 12px;
           height: 12px;
@@ -410,4 +410,4 @@ export default function GlobalAudioPlayer() {
       `}</style>
     </>
   );
-} 
+}

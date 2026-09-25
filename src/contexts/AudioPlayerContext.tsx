@@ -59,61 +59,81 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   });
 
   const audioRef = useRef<HTMLAudioElement>(null);
+  const playRequestRef = useRef(0);
 
   // 播放新音频
   const play = async (track: AudioTrack) => {
     if (!audioRef.current) return;
+    const audio = audioRef.current;
+    const request = ++playRequestRef.current;
 
     try {
-      setState(prev => ({ 
-        ...prev, 
-        isLoading: true, 
-        currentTrack: track, 
+      setState(prev => ({
+        ...prev,
+        isLoading: true,
+        currentTrack: track,
         isVisible: true,
         // 如果track有duration预设值，先使用它
-        duration: track.duration || prev.duration
+        duration: track.duration || 0
       }));
-      
-      // 如果是新的音频文件，重新加载
-      if (audioRef.current.src !== track.url) {
-        audioRef.current.src = track.url;
-        await new Promise((resolve) => {
-          const handleCanPlay = () => {
-            audioRef.current?.removeEventListener('canplay', handleCanPlay);
-            resolve(void 0);
-          };
-          audioRef.current?.addEventListener('canplay', handleCanPlay);
-        });
+
+      // play() 会自行等待媒体可播放；单独等待 canplay 会在网络或解码失败时一直挂起。
+      if (audio.src !== new URL(track.url, window.location.href).href) {
+        audio.src = track.url;
       }
-      
-      // 同步播放速度
-      audioRef.current.playbackRate = state.playbackRate;
-      await audioRef.current.play();
+
+      audio.playbackRate = state.playbackRate;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        await Promise.race([
+          audio.play(),
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(() => reject(new Error('音频加载超时')), 15000);
+          }),
+        ]);
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
     } catch (error) {
+      if (request !== playRequestRef.current) return;
       console.error('播放失败:', error);
-      toast.error('音频播放失败，请稍后重试');
+      audio.pause();
+      toast.error('音频播放失败，请检查网络后重试');
       setState(prev => ({ ...prev, isLoading: false, isPlaying: false }));
     }
   };
 
   // 暂停播放
   const pause = () => {
-    if (audioRef.current && !audioRef.current.paused) {
-      audioRef.current.pause();
-    }
+    ++playRequestRef.current;
+    audioRef.current?.pause();
+    setState(prev => ({ ...prev, isLoading: false, isPlaying: false }));
   };
 
   // 恢复播放
   const resume = async () => {
     if (!audioRef.current) return;
-    
+    const audio = audioRef.current;
+    const request = ++playRequestRef.current;
     try {
       setState(prev => ({ ...prev, isLoading: true }));
-      await audioRef.current.play();
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        await Promise.race([
+          audio.play(),
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(() => reject(new Error('音频加载超时')), 15000);
+          }),
+        ]);
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
     } catch (error) {
+      if (request !== playRequestRef.current) return;
       console.error('恢复播放失败:', error);
-      toast.error('音频播放失败，请稍后重试');
-      setState(prev => ({ ...prev, isLoading: false }));
+      audio.pause();
+      toast.error('音频播放失败，请检查网络后重试');
+      setState(prev => ({ ...prev, isLoading: false, isPlaying: false }));
     }
   };
 
@@ -129,10 +149,10 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   const setVolume = (volume: number) => {
     if (audioRef.current) {
       audioRef.current.volume = volume;
-      setState(prev => ({ 
-        ...prev, 
-        volume, 
-        isMuted: volume === 0 
+      setState(prev => ({
+        ...prev,
+        volume,
+        isMuted: volume === 0
       }));
     }
   };
@@ -140,7 +160,7 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   // 切换静音
   const toggleMute = () => {
     if (!audioRef.current) return;
-    
+
     setState(prev => {
       const newIsMuted = !prev.isMuted;
       audioRef.current!.volume = newIsMuted ? 0 : prev.volume;
@@ -174,9 +194,9 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
     const handleLoadedMetadata = () => {
       // 优先使用音频元素的实际duration，但保留预设值作为后备
       const actualDuration = audio.duration && !isNaN(audio.duration) ? audio.duration : undefined;
-      setState(prev => ({ 
-        ...prev, 
-        duration: actualDuration || prev.duration || 0 
+      setState(prev => ({
+        ...prev,
+        duration: actualDuration || prev.duration || 0
       }));
     };
 
@@ -185,21 +205,30 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
     };
 
     const handlePlay = () => {
+      setState(prev => ({ ...prev, isLoading: true }));
+    };
+
+    const handlePlaying = () => {
       setState(prev => ({ ...prev, isPlaying: true, isLoading: false }));
     };
 
+    const handleWaiting = () => {
+      setState(prev => ({ ...prev, isLoading: true }));
+    };
+
     const handlePause = () => {
-      setState(prev => ({ ...prev, isPlaying: false }));
+      setState(prev => ({ ...prev, isPlaying: false, isLoading: false }));
     };
 
     const handleEnded = () => {
-      setState(prev => ({ ...prev, isPlaying: false, currentTime: 0 }));
+      setState(prev => ({ ...prev, isPlaying: false, isLoading: false, currentTime: 0 }));
     };
 
     const handleError = (e: Event) => {
+      ++playRequestRef.current;
       const error = (e.target as HTMLAudioElement).error;
       let errorMessage = '音频播放失败';
-      
+
       if (error) {
         switch (error.code) {
           case MediaError.MEDIA_ERR_NETWORK:
@@ -215,7 +244,7 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
             errorMessage += ': 未知错误';
         }
       }
-      
+
       toast.error(errorMessage);
       setState(prev => ({ ...prev, isPlaying: false, isLoading: false }));
     };
@@ -226,6 +255,8 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('play', handlePlay);
+    audio.addEventListener('playing', handlePlaying);
+    audio.addEventListener('waiting', handleWaiting);
     audio.addEventListener('pause', handlePause);
     audio.addEventListener('ended', handleEnded);
     audio.addEventListener('error', handleError);
@@ -234,6 +265,8 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('play', handlePlay);
+      audio.removeEventListener('playing', handlePlaying);
+      audio.removeEventListener('waiting', handleWaiting);
       audio.removeEventListener('pause', handlePause);
       audio.removeEventListener('ended', handleEnded);
       audio.removeEventListener('error', handleError);
@@ -268,4 +301,4 @@ export function useAudioPlayer() {
     throw new Error('useAudioPlayer must be used within an AudioPlayerProvider');
   }
   return context;
-} 
+}
