@@ -23,6 +23,10 @@ export async function availableApiAccess(user: User, needsSearch: boolean) {
   return { llm: selection[0], tts: selection[1] }
 }
 
+export async function availableTtsAccess(user: User) {
+  return selectCapability(user, 'tts', ['MINIMAX_GROUP_ID', 'MINIMAX_TOKEN'])
+}
+
 async function selectCapability(user: User, capability: Capability, keys: SettingKey[]): Promise<{ source: ApiSource; grantId?: number; error?: string }> {
   if (user.isAdmin) {
     return await configured(user.userId, keys, false) ? { source: 'admin' }

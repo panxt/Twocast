@@ -3,15 +3,21 @@ import { getCache, setCache } from "@/utils/redis";
 import { respSuccess } from "@/utils/resp";
 import { NextRequest } from "next/server";
 import { getSetting } from '@/lib/settings';
+import { getUserSetting } from '@/lib/settings';
+import { availableTtsAccess } from '@/lib/api-access';
 import { getCurrentUser } from '@/utils/user';
 
 export async function GET(req: NextRequest) {
-    if (!(await getCurrentUser()).userEmail) return new Response('Unauthorized', { status: 401 })
+    const user = await getCurrentUser()
+    if (!user.userEmail) return new Response('Unauthorized', { status: 401 })
     const languages = req.nextUrl.searchParams.get('languages')?.split(',') || []
     const ret = {
     }
-    if (process.env.MINIMAX_ENABLED === '1') {
-        ret['minimaxi'] = await getMinimaxVoices()
+    const access = await availableTtsAccess(user)
+    if (process.env.MINIMAX_ENABLED === '1' || access.source === 'own' && !access.error) {
+        const token = access.error ? '' : access.source === 'own'
+            ? await getUserSetting(user.userId, 'MINIMAX_TOKEN') : await getSetting('MINIMAX_TOKEN')
+        ret['minimaxi'] = await getMinimaxVoices(token)
     }
     if (process.env.GEMINI_ENABLED === '1') {
         ret['gemini'] = geminiVoices
@@ -66,8 +72,7 @@ async function getFishAudioVoices(languages: string[] = [], page_size: number = 
     return ret
 }
 
-async function getMinimaxVoices() {
-    const token = await getSetting('MINIMAX_TOKEN')
+async function getMinimaxVoices(token: string) {
     if (!token) return []
 
     // China-only override: original code used api.minimax.chat (overseas), but the

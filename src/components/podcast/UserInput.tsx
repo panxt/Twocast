@@ -39,17 +39,14 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
   const [voiceId_1, setVoiceId_1] = useState('');
   const [voiceId_2, setVoiceId_2] = useState('');
   const [outputLanguage, setOutputLanguage] = useState('auto');
-  const [voices, setVoices] = useState({});
-  const [voiceOptions, setVoiceOptions] = useState([]);
+  const [voices, setVoices] = useState<Record<string, { id: string; name: string; icon?: string; sample?: string }[]>>({});
+  const [voiceOptions, setVoiceOptions] = useState<OptionItem[]>([]);
   const [selectType, setSelectType] = useState(SelectType.Select);
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
   const [apiWarning, setApiWarning] = useState('');
+  const [voiceLoadError, setVoiceLoadError] = useState('');
+  const [voiceReload, setVoiceReload] = useState(0);
   const audioRefs = useRef<{ [key: string]: HTMLAudioElement | null }>({});
-
-  // 监听 playingVoiceId 状态变化
-  useEffect(() => {
-    console.log('Main component - playingVoiceId changed to:', playingVoiceId);
-  }, [playingVoiceId]);
 
   const tabs = [
     { id: PodcastInputType.Topic, label: t('tabs.topic'), icon: "🧠" },
@@ -96,15 +93,24 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
   }
 
   useEffect(() => {
+    let active = true;
     const fetchVoices = async () => {
-      const resp = await apiRequest({
-        url: '/api/voices',
-        method: 'GET',
-      })
-      setVoices(resp.data.data)
+      try {
+        const response = await fetch('/api/voices', { cache: 'no-store' });
+        if (!response.ok) throw new Error('音色列表加载失败');
+        const body = await response.json();
+        if (body.code !== 0) throw new Error(body.message || '音色列表加载失败');
+        if (active) {
+          setVoices(body.data || {});
+          setVoiceLoadError('');
+        }
+      } catch {
+        if (active) setVoiceLoadError('音色列表暂时无法加载，请重试。');
+      }
     }
     fetchVoices()
-  }, []);
+    return () => { active = false };
+  }, [voiceReload]);
 
   useEffect(() => {
     fetch('/api/user/settings').then(response => response.json()).then(data => {
@@ -114,25 +120,30 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
 
   useEffect(() => {
     if (platform) {
-      console.log('platform', platform)
       // setVoiceId_1('');
       // setVoiceId_2('');
       if (platform.includes('custom')) {
         setSelectType(SelectType.Input);
       } else {
         setSelectType(SelectType.Select);
-        if (voices[platform]) {
-          setVoiceOptions(voices[platform].map(v => {
+        const availableVoices = voices[platform] || [];
+        const fallback: typeof availableVoices = platform === Platform.Minimax
+          ? [
+            { id: platformDefaultVoices[Platform.Minimax].voiceId_1, name: '默认主持人 A' },
+            { id: platformDefaultVoices[Platform.Minimax].voiceId_2, name: '默认主持人 B' },
+          ].filter(item => !availableVoices.some(voice => voice.id === item.id)) : [];
+        if (availableVoices.length || fallback.length) {
+          setVoiceOptions([...availableVoices, ...fallback].map(v => {
             return {
               id: v.id,
               label: v.name,
-              icon: v.icon,
+              icon: v.icon || '',
               render: (option: OptionItem) => {
                 return (
                   <VoicePlayerButton
                     key={v.id}
                     id={v.id}
-                    sample={v.sample}
+                    sample={v.sample || ''}
                     label={option.label}
                     playingVoiceId={playingVoiceId}
                     setPlayingVoiceId={setPlayingVoiceId}
@@ -171,7 +182,6 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
 
   useEffect(() => {
     // 当 platform 或 voices 变化时，重置播放状态
-    console.log('Platform/voices changed, resetting playingVoiceId. Platform:', platform, 'Voices keys:', Object.keys(voices));
     setPlayingVoiceId(null);
     // 暂停所有 audio
     Object.values(audioRefs.current).forEach(audio => {
@@ -393,6 +403,9 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
 
         {apiWarning && <div role="status" className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
           {apiWarning} <Link href={getLocalePath(locale, '/settings')} className="font-semibold underline">查看 API 配置与授权</Link>
+        </div>}
+        {voiceLoadError && <div role="alert" className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
+          {voiceLoadError} <button type="button" onClick={() => setVoiceReload(value => value + 1)} className="font-semibold underline">重新加载</button>
         </div>}
 
         {/* Bottom Section with Speed Selector and Create Button */}
