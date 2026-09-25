@@ -83,7 +83,7 @@ async function finalizeAudio(uuid: string, files: string[], script: ScriptItem[]
   await updateProgress(task.id, 'finalizing')
   const parts = await Promise.all(files.map(readAudio))
   const scriptResult = taskGetStepItem(task, PodcastStep.Audio).input as LongTextResult
-  const result = await finalizeMp3(parts, script, scriptResult?.title || 'ToCast 播客')
+  const result = await finalizeMp3(parts, script, scriptResult?.title || '驿路通·声笺')
   const location = await storeAudio(`${uuid}.mp3`, result.audio)
   taskUpdateStepItem(task, PodcastStep.Audio, {
     output: { location, duration: result.duration, timedScript: result.timedScript },
