@@ -34,6 +34,8 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
   const [activeTab, setActiveTab] = useState(PodcastInputType.Topic);
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  const [uploadPercent, setUploadPercent] = useState<number | null>(null);
+  const [submitPhase, setSubmitPhase] = useState<'upload' | 'processing'>('processing');
   const [readyToSubmit, setReadyToSubmit] = useState(false);
   const [platform, setPlatform] = useState(Platform.Minimax.toString());
   const [voiceId_1, setVoiceId_1] = useState('');
@@ -203,6 +205,8 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
   const handleSubmit = async () => {
     if (!readyToSubmit) return;
     setLoading(true);
+    setUploadPercent(null);
+    setSubmitPhase(activeTab === PodcastInputType.File ? 'upload' : 'processing');
     try {
       const formData = new FormData();
       formData.append("type", activeTab);
@@ -219,6 +223,12 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
         url: "/api/protected/gen-podcast",
         method: "POST",
         data: formData,
+        onUploadProgress: activeTab === PodcastInputType.File ? event => {
+          if (!event.total) return;
+          const percent = Math.min(100, Math.round(event.loaded / event.total * 100));
+          setUploadPercent(percent);
+          if (percent === 100) setSubmitPhase('processing');
+        } : undefined,
       });
       if (response.data?.code !== 0) throw new Error(response.data?.message || '提交失败');
       toast.success("任务已提交");
@@ -231,6 +241,7 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
       if (error instanceof Error && !('response' in error)) toast.error(error.message);
     } finally {
       setLoading(false);
+      setUploadPercent(null);
     }
   };
 
@@ -447,6 +458,14 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
             )}
           </button>
         </div>
+        {loading && <div role="status" className="mt-3 rounded-lg bg-indigo-50 px-4 py-3 text-sm text-indigo-900 dark:bg-indigo-950 dark:text-indigo-100">
+          <p>{submitPhase === 'upload' ? `正在上传文件${uploadPercent === null ? '…' : ` ${uploadPercent}%`}` : '正在解析素材并创建任务…'}</p>
+          {submitPhase === 'upload' && <div role="progressbar" aria-label="文件上传进度" aria-valuemin={0} aria-valuemax={100}
+            aria-valuenow={uploadPercent ?? undefined} className="mt-2 h-2 overflow-hidden rounded-full bg-indigo-200 dark:bg-indigo-900">
+            <div className="h-full bg-indigo-600 transition-[width]" style={{ width: `${uploadPercent ?? 0}%` }} />
+          </div>}
+          <p className="mt-1 text-xs opacity-75">任务创建后，可在下方“音频与文件”查看生成阶段。</p>
+        </div>}
         {/* platform tips */}
         {platformTips[platform as Platform] && (
           <div className="mt-4 sm:mt-5">

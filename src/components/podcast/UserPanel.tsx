@@ -15,7 +15,10 @@ export function UserPanel() {
       </header>
       <section aria-label="创建播客">
         <h2 className="mb-4 text-lg font-semibold">新建节目</h2>
-        <UserInput onSubmitSuccess={() => setRefreshTrigger(value => value + 1)} />
+        <UserInput onSubmitSuccess={() => {
+          setRefreshTrigger(value => value + 1)
+          document.getElementById('episode-library')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }} />
       </section>
       <ListPanel refreshTrigger={refreshTrigger} apiUrl="/api/protected/get-list" />
     </div>
