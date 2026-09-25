@@ -19,6 +19,8 @@ export default function SettingsPage() {
   const [ready, setReady] = useState(false)
   const [values, setValues] = useState<Record<string, string>>({})
   const [configured, setConfigured] = useState<Record<string, boolean>>({})
+  const [apiEnabled, setApiEnabled] = useState<Record<'llm' | 'tts', boolean>>({ llm: true, tts: true })
+  const [savingToggle, setSavingToggle] = useState<'llm' | 'tts' | null>(null)
   const [access, setAccess] = useState<any>(null)
   const [message, setMessage] = useState('')
   const [displayName, setDisplayName] = useState('')
@@ -66,6 +68,7 @@ export default function SettingsPage() {
     }
     setValues(next)
     setConfigured(flags)
+    setApiEnabled({ llm: data.settings.API_LLM_ENABLED !== '0', tts: data.settings.API_TTS_ENABLED !== '0' })
     setAccess(data.access || null)
     setReady(true)
     if (me.isAdmin && refreshTeam) void loadTeam()
@@ -90,6 +93,20 @@ export default function SettingsPage() {
     })
     setMessage(response.ok ? '已移除私有密钥' : (await response.json()).error)
     if (response.ok) await load(false)
+  }
+  async function toggleApi(capability: 'llm' | 'tts') {
+    const next = !apiEnabled[capability]
+    const key = capability === 'llm' ? 'API_LLM_ENABLED' : 'API_TTS_ENABLED'
+    setSavingToggle(capability)
+    try {
+      const response = await fetch(admin ? '/api/admin/settings' : '/api/user/settings', {
+        method: 'PUT', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ [key]: next ? '1' : '0' }),
+      })
+      const data = await response.json()
+      setMessage(response.ok ? `${capability === 'llm' ? '大模型' : '语音'} API 已${next ? '启用' : '停用'}` : data.error || '切换失败')
+      if (response.ok) await load(false)
+    } finally { setSavingToggle(null) }
   }
   async function createInvite() {
     const response = await fetch('/api/admin/invites', {
@@ -180,6 +197,17 @@ export default function SettingsPage() {
     </section>}
     <section className="space-y-4 rounded-xl border p-5">
       <h2 className="text-lg font-semibold">{admin ? '全局 API' : '我的私有 API'}</h2>
+      <p className="text-sm text-gray-600 dark:text-gray-400">{admin
+        ? '停用后，你和获得共享授权的成员都不会使用这类全局 API；各成员自己的密钥不受影响。'
+        : '可分别停用自己的大模型或语音密钥，密钥会保留；若有管理员共享授权，会自动改用共享额度。'}</p>
+      <div className="grid gap-3 sm:grid-cols-2">{(['llm', 'tts'] as const).map(kind => <div key={kind}
+        className="flex items-center justify-between gap-3 rounded-lg border px-4 py-3 dark:border-gray-700">
+        <span className="text-sm"><strong>{kind === 'llm' ? '大模型' : 'MiniMax 语音'}</strong>
+          <span className="ml-2 text-gray-500">{apiEnabled[kind] ? '已启用' : '已停用'}</span></span>
+        <button type="button" onClick={() => void toggleApi(kind)} disabled={savingToggle !== null}
+          aria-label={`${apiEnabled[kind] ? '停用' : '启用'}${kind === 'llm' ? '大模型' : '语音'} API`}
+          className="rounded-md border px-3 py-1.5 text-sm disabled:opacity-50">{savingToggle === kind ? '保存中…' : apiEnabled[kind] ? '停用' : '启用'}</button>
+      </div>)}</div>
       <p className="text-xs text-gray-500">密钥留空表示保留已有值。URL 只接受已接入服务的 HTTPS 地址。</p>
       <div className="grid gap-4 sm:grid-cols-2">{fields.map(([key, label]) => <label key={key} className="block">
         <span className="block text-sm font-medium">{label}{configured[key] ? '（已配置）' : ''}</span>

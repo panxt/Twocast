@@ -6,7 +6,7 @@ const mockSetSetting = jest.fn()
 
 jest.mock('@/utils/user', () => ({ getCurrentUser: () => mockGetCurrentUser() }))
 jest.mock('@/lib/settings', () => ({
-  SETTING_KEYS: ['LLM_CHAT_URL', 'LLM_CHAT_MODEL', 'LLM_API_KEY', 'LLM_SEARCH_URL'],
+  SETTING_KEYS: ['LLM_CHAT_URL', 'LLM_CHAT_MODEL', 'LLM_API_KEY', 'LLM_SEARCH_URL', 'API_LLM_ENABLED', 'API_TTS_ENABLED'],
   getSettings: (...args: unknown[]) => mockGetSettings(...args),
   setSetting: (...args: unknown[]) => mockSetSetting(...args),
 }))
@@ -41,5 +41,11 @@ describe('administrator API settings', () => {
     const response = await PUT(requestFor({ LLM_CHAT_MODEL: 'new-model', LLM_CHAT_URL: 'http://unsafe.example' }))
     expect(response.status).toBe(400)
     expect(mockSetSetting).not.toHaveBeenCalled()
+  })
+
+  it('lets the administrator pause the global voice key', async () => {
+    const response = await PUT(requestFor({ API_TTS_ENABLED: '0' }))
+    expect(response.status).toBe(200)
+    expect(mockSetSetting).toHaveBeenCalledWith('API_TTS_ENABLED', '0')
   })
 })

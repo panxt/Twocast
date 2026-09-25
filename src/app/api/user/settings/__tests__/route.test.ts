@@ -8,7 +8,7 @@ const mockWhere = jest.fn()
 jest.mock('@/utils/user', () => ({ getCurrentUser: () => mockGetCurrentUser() }))
 jest.mock('@/db/db', () => ({ getDb: () => ({ delete: mockDelete }) }))
 jest.mock('@/lib/settings', () => ({
-  SETTING_KEYS: ['LLM_CHAT_URL', 'LLM_CHAT_MODEL', 'LLM_API_KEY', 'LLM_SEARCH_URL'],
+  SETTING_KEYS: ['LLM_CHAT_URL', 'LLM_CHAT_MODEL', 'LLM_API_KEY', 'LLM_SEARCH_URL', 'API_LLM_ENABLED', 'API_TTS_ENABLED'],
   getUserSettings: jest.fn(),
   setUserSetting: (...args: unknown[]) => mockSetUserSetting(...args),
 }))
@@ -35,6 +35,19 @@ describe('member API settings', () => {
     const response = await PUT(requestFor({ LLM_CHAT_MODEL: 'new-model', LLM_CHAT_URL: 'http://unsafe.example' }))
     expect(response.status).toBe(400)
     expect(mockDelete).not.toHaveBeenCalled()
+    expect(mockSetUserSetting).not.toHaveBeenCalled()
+  })
+
+  it('allows a member to pause their own LLM key without removing it', async () => {
+    const response = await PUT(requestFor({ API_LLM_ENABLED: '0' }))
+    expect(response.status).toBe(200)
+    expect(mockSetUserSetting).toHaveBeenCalledWith(5, 'API_LLM_ENABLED', '0')
+    expect(mockDelete).not.toHaveBeenCalled()
+  })
+
+  it('rejects invalid key control values', async () => {
+    const response = await PUT(requestFor({ API_TTS_ENABLED: 'disabled' }))
+    expect(response.status).toBe(400)
     expect(mockSetUserSetting).not.toHaveBeenCalled()
   })
 })

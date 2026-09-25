@@ -2,7 +2,7 @@ import 'server-only'
 import { and, eq, gt, isNull, or, sql } from 'drizzle-orm'
 import { getDb } from '@/db/db'
 import { apiGrantsTable } from '@/db/schema'
-import { getSettings, getUserSettings, SettingKey } from './settings'
+import { getSettings, getUserSettings, SettingKey, ApiToggleKey } from './settings'
 import { ApiAccess, ApiSource } from './api-context'
 
 type User = { userId: number; inviteCodeId: number | null; isAdmin: boolean }
@@ -11,6 +11,12 @@ type Capability = 'llm' | 'tts'
 async function configured(userId: number, keys: SettingKey[], own: boolean) {
   const values = own ? await getUserSettings(userId, keys) : await getSettings(keys)
   return keys.every(key => Boolean(values[key]))
+}
+
+async function enabled(userId: number, capability: Capability, own: boolean) {
+  const key: ApiToggleKey = capability === 'llm' ? 'API_LLM_ENABLED' : 'API_TTS_ENABLED'
+  const values = own ? await getUserSettings(userId, [key]) : await getSettings([key])
+  return values[key] !== '0'
 }
 
 export async function availableApiAccess(user: User, needsSearch: boolean) {
@@ -29,20 +35,26 @@ export async function availableTtsAccess(user: User) {
 
 async function selectCapability(user: User, capability: Capability, keys: SettingKey[]): Promise<{ source: ApiSource; grantId?: number; error?: string }> {
   if (user.isAdmin) {
+    if (!(await enabled(user.userId, capability, false))) return { source: 'admin', error: `${capability === 'llm' ? '大模型' : '语音'} API 已停用，请在设置中启用` }
     return await configured(user.userId, keys, false) ? { source: 'admin' }
       : { source: 'admin', error: `${capability === 'llm' ? '大模型' : 'MiniMax TTS'} 尚未配置` }
   }
-  if (await configured(user.userId, keys, true)) return { source: 'own' }
+  const ownEnabled = await enabled(user.userId, capability, true)
+  const ownConfigured = await configured(user.userId, keys, true)
+  if (ownEnabled && ownConfigured) return { source: 'own' }
   const grants = await getDb().select().from(apiGrantsTable).where(and(
     eq(apiGrantsTable.capability, capability),
     or(eq(apiGrantsTable.userId, user.userId), user.inviteCodeId ? eq(apiGrantsTable.inviteCodeId, user.inviteCodeId) : undefined),
   )).orderBy(sql`CASE WHEN ${apiGrantsTable.userId} IS NOT NULL THEN 0 ELSE 1 END`, apiGrantsTable.id)
   const grant = grants.find(item => item.usedEpisodes < item.maxEpisodes && (!item.expiresAt || item.expiresAt > new Date()))
   if (grant) {
+    if (!(await enabled(user.userId, capability, false))) return { source: 'grant', error: `管理员已停用共享${capability === 'llm' ? '大模型' : '语音'} API` }
     if (!(await configured(user.userId, keys, false))) return { source: 'grant', error: '管理员共享 API 尚未配置完整' }
     return { source: 'grant', grantId: grant.id }
   }
-  return { source: 'grant', error: grants.length
+  return { source: 'grant', error: !ownEnabled && ownConfigured && !grants.length
+    ? `自己的${capability === 'llm' ? '大模型' : '语音'} API 已停用，且未获管理员共享授权`
+    : grants.length
     ? `${capability === 'llm' ? '大模型' : '语音'}共享额度已用完；请配置自己的 API 或联系管理员`
     : `未获管理员共享${capability === 'llm' ? '大模型' : '语音'} API 授权；请配置自己的 API 或联系管理员` }
 }

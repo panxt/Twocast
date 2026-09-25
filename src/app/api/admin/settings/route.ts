@@ -24,6 +24,9 @@ export async function PUT(request: NextRequest) {
     const value = input[key]
     if (typeof value !== 'string' || value.length > 2048) return NextResponse.json({ error: `Invalid ${key}` }, { status: 400 })
     const trimmed = value.trim()
+    if ((key === 'API_LLM_ENABLED' || key === 'API_TTS_ENABLED') && trimmed !== '0' && trimmed !== '1') {
+      return NextResponse.json({ error: `Invalid ${key}` }, { status: 400 })
+    }
     if (SECRET_KEYS.has(key) && !trimmed) continue // blank means retain existing key
     if (key.endsWith('_URL') && trimmed) {
       try { if (new URL(trimmed).protocol !== 'https:') throw new Error() }
