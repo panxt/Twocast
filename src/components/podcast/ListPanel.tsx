@@ -24,7 +24,7 @@ const progressLabel = (task: TaskVO) => {
 
 export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: ListPanelProps) {
   const { i18n } = useTranslation()
-  const { play, pause, isPlaying, currentTrack } = useAudioPlayer()
+  const { play, pause, resume, isPlaying, isLoading, currentTrack } = useAudioPlayer()
   const [items, setItems] = useState<TaskVO[]>([])
   const [page, setPage] = useState(1)
   const [pages, setPages] = useState(1)
@@ -143,8 +143,10 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: Lis
   }
   function togglePlay(task: TaskVO) {
     if (!task.result?.audio_url) return
-    if (isPlaying && currentTrack?.id === task.uuid) pause()
-    else play({ id: task.uuid, url: task.result.audio_url, title: titleOf(task), duration: task.result.duration })
+    if (currentTrack?.id === task.uuid) {
+      if (isPlaying || isLoading) pause()
+      else resume()
+    } else play({ id: task.uuid, url: task.result.audio_url, title: titleOf(task), duration: task.result.duration })
   }
 
   return <section id="episode-library" className="scroll-mt-6 rounded-2xl border border-gray-200 bg-white/90 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900/80 sm:p-6">
@@ -183,9 +185,9 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: Lis
       {items.map(task => <div key={task.uuid} className="py-4">
         <div className="flex flex-wrap items-center gap-3">
           <button onClick={() => togglePlay(task)} disabled={!task.result?.audio_url}
-            aria-label={isPlaying && currentTrack?.id === task.uuid ? '暂停' : '播放'}
+            aria-label={(isPlaying || isLoading) && currentTrack?.id === task.uuid ? '暂停' : '播放'}
             className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-indigo-600 text-white disabled:bg-gray-300">
-            {isPlaying && currentTrack?.id === task.uuid ? 'Ⅱ' : '▶'}</button>
+            {(isPlaying || isLoading) && currentTrack?.id === task.uuid ? 'Ⅱ' : '▶'}</button>
           <div className="min-w-0 flex-1">
             <Link href={getLocalePath(i18n.language, `/podcast/${task.uuid}`)}
               className="block truncate font-medium text-gray-900 hover:text-indigo-600 dark:text-white">{titleOf(task)}</Link>

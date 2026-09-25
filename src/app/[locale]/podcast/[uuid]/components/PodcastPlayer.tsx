@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { formatDuration } from '@/utils/time';
 
 interface PodcastPlayerProps {
+  trackId: string;
   audioUrl: string;
   downloadUrl?: string;
   title: string;
@@ -15,12 +16,12 @@ interface PodcastPlayerProps {
   lyricsUrl?: string;
 }
 
-export default function PodcastPlayer({ audioUrl, downloadUrl, title, artist, thumbnail, duration, lyricsUrl }: PodcastPlayerProps) {
+export default function PodcastPlayer({ trackId, audioUrl, downloadUrl, title, artist, thumbnail, duration, lyricsUrl }: PodcastPlayerProps) {
   const { play, pause, resume, currentTrack, isPlaying, isLoading } = useAudioPlayer();
   const {t} = useTranslation('podcast');
 
   // 检查是否是当前正在播放的音频
-  const isCurrentTrack = currentTrack?.url === audioUrl;
+  const isCurrentTrack = currentTrack?.id === trackId;
 
   // 开始播放
   const handlePlay = () => {
@@ -33,7 +34,7 @@ export default function PodcastPlayer({ audioUrl, downloadUrl, title, artist, th
     }
 
     play({
-      id: audioUrl, // 使用URL作为唯一ID
+      id: trackId,
       url: audioUrl,
       title,
       artist,

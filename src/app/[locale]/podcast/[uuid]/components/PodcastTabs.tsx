@@ -7,18 +7,18 @@ import { useTranslation } from 'react-i18next';
 import { useAudioPlayer } from '@/contexts/AudioPlayerContext';
 
 interface PodcastTabsProps {
+  trackId: string;
   outline: string;
   keyPoints: string;
   scripts: ScriptItem[];
   timedScript?: { role: string; text: string; startMs: number }[];
-  audioUrl: string;
 }
 
-export default function PodcastTabs({ outline, keyPoints, scripts, timedScript, audioUrl }: PodcastTabsProps) {
+export default function PodcastTabs({ outline, keyPoints, scripts, timedScript, trackId }: PodcastTabsProps) {
   const [activeTab, setActiveTab] = useState<'outline' | 'scripts'>(timedScript?.length ? 'scripts' : 'outline');
   const {t} = useTranslation('podcast');
   const { currentTime, seek, currentTrack } = useAudioPlayer();
-  const isCurrentTrack = currentTrack?.url === audioUrl;
+  const isCurrentTrack = currentTrack?.id === trackId;
   const activeLine = isCurrentTrack ? (timedScript?.findLastIndex(line => line.startMs <= currentTime * 1000) ?? -1) : -1;
   const scriptListRef = useRef<HTMLDivElement>(null);
   const lineRefs = useRef<(HTMLDivElement | null)[]>([]);
