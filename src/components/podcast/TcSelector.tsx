@@ -40,6 +40,14 @@ export function TcSelector({value, onChange, options, title}: {title?: string, v
         option.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (option.description && option.description.toLowerCase().includes(searchQuery.toLowerCase()))
     );
+    const maxVisible = 50;
+    const selectedOption = filteredOptions.find(option => option.id === value);
+    const visibleOptions = filteredOptions.slice(0, maxVisible);
+    if (selectedOption && !visibleOptions.some(option => option.id === value)) {
+      visibleOptions.pop();
+      visibleOptions.unshift(selectedOption);
+    }
+    const optionClass = 'block w-full px-3 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm hover:bg-indigo-50 dark:hover:bg-indigo-900/30 relative z-10';
 
     return (
         <div className="relative flex-shrink-0" ref={containerRef}>
@@ -84,38 +92,30 @@ export function TcSelector({value, onChange, options, title}: {title?: string, v
               {/* Options list with max height and scroll */}
               <div className="max-h-[300px] overflow-y-auto">
                 {filteredOptions.length > 0 ? (
-                  filteredOptions.map((option) => (
-                    <button
-                      key={option.id}
-                      onClick={() => {
+                  visibleOptions.map((option) => {
+                    const choose = () => {
                         onChange(option.id);
                         setIsOpen(false);
                         setSearchQuery("");
-                      }}
-                      className="block w-full px-3 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 dark:hover:from-blue-900/30 dark:hover:to-indigo-900/30 transition-all duration-200 relative z-10"
-                    >
-                      {option.render ? (
-                        option.render(option)
-                      ) : (
-                        <div>
-                          <div className="font-medium text-gray-800 dark:text-gray-100">
-                            {option.label}
-                          </div>
-                          {option.description && (
-                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 whitespace-normal">
-                              {option.description}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </button>
-                  ))
+                    };
+                    return option.render ? <div key={option.id} role="button" tabIndex={0}
+                      aria-label={`选择${option.label}`} className={optionClass} onClick={choose}
+                      onKeyDown={event => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); choose(); } }}>
+                      {option.render(option)}
+                    </div> : <button key={option.id} type="button" onClick={choose} className={optionClass}>
+                      <span className="font-medium text-gray-800 dark:text-gray-100">{option.label}</span>
+                      {option.description && <span className="mt-0.5 block whitespace-normal text-xs text-gray-500 dark:text-gray-400">{option.description}</span>}
+                    </button>;
+                  })
                 ) : (
                   <div className="px-3 sm:px-4 py-3 text-xs sm:text-sm text-gray-500 dark:text-gray-400 text-center">
                     没有匹配选项
                   </div>
                 )}
               </div>
+              {filteredOptions.length > maxVisible && <p className="border-t px-3 py-2 text-center text-xs text-gray-500 dark:border-gray-700">
+                显示 {maxVisible} / {filteredOptions.length} 项，搜索可找到更多
+              </p>}
             </div>
           )}
         </div>
