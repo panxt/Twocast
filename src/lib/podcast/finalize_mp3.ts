@@ -37,7 +37,7 @@ function withoutLeadingId3(mp3: Buffer): Buffer {
 // ID3v2.3/UTF-16 is understood by more desktop players than v2.4/UTF-8.
 // USLT carries LRC timestamps for players that only read the common lyrics
 // field; SYLT carries the same timings in the standard synchronized frame.
-export function embedScript(mp3: Buffer, lines: TimedScriptItem[], durationSeconds: number, title = 'ToCast 播客'): Buffer {
+export function embedScript(mp3: Buffer, lines: TimedScriptItem[], durationSeconds: number, title = '驿路通·声笺'): Buffer {
   const fullText = lines.map(line => `${line.role}: ${line.text}`).join('\n')
   const uslt = Buffer.concat([Buffer.from([1]), Buffer.from('zho', 'ascii'), Buffer.alloc(2), utf16(toLrc(lines, title))])
   const syltHeader = Buffer.concat([Buffer.from([1]), Buffer.from('zho', 'ascii'), Buffer.from([2, 1]), Buffer.alloc(2)])
@@ -49,8 +49,8 @@ export function embedScript(mp3: Buffer, lines: TimedScriptItem[], durationSecon
   const tlen = Buffer.from(`\x00${Math.round(durationSeconds * 1000)}`, 'ascii')
   const frames = Buffer.concat([
     id3Frame('TIT2', id3Text(title)),
-    id3Frame('TPE1', id3Text('ToCast')),
-    id3Frame('TALB', id3Text('ToCast 播客')),
+    id3Frame('TPE1', id3Text('驿路通')),
+    id3Frame('TALB', id3Text('驿路通·声笺')),
     id3Frame('USLT', uslt), id3Frame('SYLT', Buffer.concat([syltHeader, ...syltLines])),
     id3Frame('TXXX', Buffer.concat([Buffer.from([1]), utf16('LYRICS'), Buffer.alloc(2), utf16(fullText)])),
     id3Frame('TLEN', tlen),

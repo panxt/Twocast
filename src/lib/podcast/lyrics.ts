@@ -10,5 +10,5 @@ export function toLrc(lines: TimedScriptItem[], title: string): string {
     const time = `[${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(hundredths).padStart(2, '0')}]`
     return `${time}${line.role}: ${line.text.replace(/[\r\n]+/g, ' ')}`
   })
-  return [`[ti:${safeTitle}]`, '[ar:ToCast]', ...body].join('\n') + '\n'
+  return [`[ti:${safeTitle}]`, '[ar:驿路通]', ...body].join('\n') + '\n'
 }
