@@ -13,7 +13,7 @@ export async function GET() {
     const grants = await db.select().from(apiGrantsTable).orderBy(desc(apiGrantsTable.createdAt))
     const users = await db.select({ id: sessionsTable.id, displayName: sessionsTable.displayName,
       inviteCodeId: sessionsTable.inviteCodeId, role: sessionsTable.role,
-      teamAccess: sessionsTable.teamAccess }).from(sessionsTable)
+      teamAccess: sessionsTable.teamAccess, expiresAt: sessionsTable.expiresAt }).from(sessionsTable)
       .where(eq(sessionsTable.role, 'member')).orderBy(desc(sessionsTable.id))
     const codes = await db.select({ id: inviteCodesTable.id, label: inviteCodesTable.label,
       usedCount: inviteCodesTable.usedCount, maxUses: inviteCodesTable.maxUses,
