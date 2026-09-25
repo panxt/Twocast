@@ -4,7 +4,6 @@ import { useParams, usePathname } from 'next/navigation'
 import siteMetadata from '@/data/siteMetadata'
 import Link from './mdxcomponents/Link'
 import ThemeSwitch from './theme/ThemeSwitch'
-import LangSwitch from './langswitch'
 import type { LocaleTypes } from '@/i18n/settings'
 import { getLocalePath } from '@/utils/locale-util'
 
@@ -29,7 +28,6 @@ export default function Header() {
         <Link href={settings} aria-current={pathname === settings ? 'page' : undefined}
           className="font-medium text-slate-700 hover:text-indigo-600 dark:text-slate-200">设置</Link>
         <ThemeSwitch />
-        <LangSwitch />
       </nav>
     </div>
   </header>

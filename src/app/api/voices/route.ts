@@ -14,9 +14,10 @@ export async function GET(req: NextRequest) {
     const ret = {
     }
     const access = await availableTtsAccess(user)
-    if (process.env.MINIMAX_ENABLED === '1' || access.source === 'own' && !access.error) {
+    if (process.env.MINIMAX_ENABLED === '1' || (access.source === 'own' || access.source === 'member') && !access.error) {
         const token = access.error ? '' : access.source === 'own'
-            ? await getUserSetting(user.userId, 'MINIMAX_TOKEN') : await getSetting('MINIMAX_TOKEN')
+            ? await getUserSetting(user.userId, 'MINIMAX_TOKEN') : access.source === 'member' && access.ownerUserId
+              ? await getUserSetting(access.ownerUserId, 'MINIMAX_TOKEN') : await getSetting('MINIMAX_TOKEN')
         ret['minimaxi'] = await getMinimaxVoices(token)
     }
     if (process.env.GEMINI_ENABLED === '1') {

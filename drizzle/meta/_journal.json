@@ -8,6 +8,13 @@
       "when": 1790173372864,
       "tag": "0000_milky_sasquatch",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790325500000,
+      "tag": "0001_invite_daily_member_shares",
+      "breakpoints": true
     }
   ]
 }

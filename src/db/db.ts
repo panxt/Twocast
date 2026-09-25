@@ -22,6 +22,7 @@ export function getDb() {
             prepare: false,
             max: 1, // Serverless instances must not exhaust the transaction pooler.
             idle_timeout: 20,
+            connect_timeout: 8,
         })
         globalThis.db = drizzle({ client });
     }

@@ -40,6 +40,9 @@ export const inviteCodesTable = pgTable('invite_codes', {
   label: varchar('label', { length: 120 }),
   maxUses: integer('max_uses').notNull().default(1),
   usedCount: integer('used_count').notNull().default(0),
+  dailyMaxUses: integer('daily_max_uses'),
+  dailyUsedCount: integer('daily_used_count').notNull().default(0),
+  dailyUsedOn: varchar('daily_used_on', { length: 10 }),
   teamAccess: boolean('team_access').notNull().default(false),
   expiresAt: timestamp('expires_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -78,5 +81,16 @@ export const apiGrantsTable = pgTable('api_grants', {
   maxEpisodes: integer('max_episodes').notNull(),
   usedEpisodes: integer('used_episodes').notNull().default(0),
   expiresAt: timestamp('expires_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const memberApiSharesTable = pgTable('member_api_shares', {
+  id: integer().primaryKey().generatedByDefaultAsIdentity(),
+  ownerUserId: integer('owner_user_id').notNull(),
+  recipientUserId: integer('recipient_user_id').notNull(),
+  capability: varchar('capability', { length: 16 }).notNull(),
+  maxEpisodes: integer('max_episodes').notNull(),
+  usedEpisodes: integer('used_episodes').notNull().default(0),
+  active: boolean('active').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });

@@ -1,6 +1,6 @@
 import { and, eq, inArray, sql } from 'drizzle-orm'
 import { getDb } from '@/db/db'
-import { apiGrantsTable, tasksTable } from '@/db/schema'
+import { apiGrantsTable, memberApiSharesTable, tasksTable } from '@/db/schema'
 import { getTaskByUuid } from '@/models/task'
 import { PodcastInputType, TaskUserInput } from './types'
 import { processTopicTask } from '@/queue/topic_queue'
@@ -36,7 +36,8 @@ async function prepareInput(uuid: string) {
   await updateProgress(task.id, 'preparing')
   const type = (task.userInputs as TaskUserInput).type
   const access = (task.userInputs as TaskUserInput).apiAccess || { llm: 'admin' as const, tts: 'admin' as const }
-  await withApiContext({ userId: task.userId, access }, async () => {
+  const inputs = task.userInputs as TaskUserInput
+  await withApiContext({ userId: task.userId, access, keyOwners: inputs.apiKeyOwners, keyShareIds: inputs.apiKeyShareIds }, async () => {
     if (type === PodcastInputType.Topic) await processTopicTask(task, false)
     else if (type === PodcastInputType.Link) await processLinkTask(task, false)
     else if (type === PodcastInputType.FrontPage) await processFrontPageTask(task, false)
@@ -50,7 +51,8 @@ async function writeScript(uuid: string) {
   const task = await loadTask(uuid)
   await updateProgress(task.id, 'script')
   const access = (task.userInputs as TaskUserInput).apiAccess || { llm: 'admin' as const, tts: 'admin' as const }
-  await withApiContext({ userId: task.userId, access }, () => processLongTextTask(task, false))
+  const inputs = task.userInputs as TaskUserInput
+  await withApiContext({ userId: task.userId, access, keyOwners: inputs.apiKeyOwners, keyShareIds: inputs.apiKeyShareIds }, () => processLongTextTask(task, false))
   return uuid
 }
 
@@ -70,7 +72,8 @@ async function generateAudioSegment(uuid: string, index: number, total: number, 
   'use step'
   const task = await loadTask(uuid)
   const access = (task.userInputs as TaskUserInput).apiAccess || { llm: 'admin' as const, tts: 'admin' as const }
-  const audio = await withApiContext({ userId: task.userId, access }, () => genVoiceMinimax(line.text, { id: voiceId }))
+  const inputs = task.userInputs as TaskUserInput
+  const audio = await withApiContext({ userId: task.userId, access, keyOwners: inputs.apiKeyOwners, keyShareIds: inputs.apiKeyShareIds }, () => genVoiceMinimax(line.text, { id: voiceId }))
   const filename = `tmp-${uuid}-${index}.mp3`
   await storeAudio(filename, audio.audio)
   await updateProgress(task.id, 'audio', index + 1, total)
@@ -117,6 +120,13 @@ async function markFailed(uuid: string, reason: string) {
       await tx.update(apiGrantsTable)
         .set({ usedEpisodes: sql`GREATEST(0, ${apiGrantsTable.usedEpisodes} - 1)` })
         .where(eq(apiGrantsTable.id, id))
+    }
+    const shareIds = (failed.userInputs as TaskUserInput | null)?.reservedMemberShareIds || []
+    for (const id of new Set(shareIds)) {
+      if (!Number.isInteger(id) || id < 1) continue
+      await tx.update(memberApiSharesTable)
+        .set({ usedEpisodes: sql`GREATEST(0, ${memberApiSharesTable.usedEpisodes} - 1)` })
+        .where(eq(memberApiSharesTable.id, id))
     }
   })
 }

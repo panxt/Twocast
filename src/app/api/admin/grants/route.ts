@@ -17,6 +17,8 @@ export async function GET() {
       .where(eq(sessionsTable.role, 'member')).orderBy(desc(sessionsTable.id))
     const codes = await db.select({ id: inviteCodesTable.id, label: inviteCodesTable.label,
       usedCount: inviteCodesTable.usedCount, maxUses: inviteCodesTable.maxUses,
+      dailyMaxUses: inviteCodesTable.dailyMaxUses, dailyUsedCount: inviteCodesTable.dailyUsedCount,
+      dailyUsedOn: inviteCodesTable.dailyUsedOn,
       teamAccess: inviteCodesTable.teamAccess, expiresAt: inviteCodesTable.expiresAt }).from(inviteCodesTable)
       .orderBy(desc(inviteCodesTable.createdAt))
     return NextResponse.json({ grants, users, codes })
