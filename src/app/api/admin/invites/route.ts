@@ -1,8 +1,8 @@
 import { randomBytes } from 'crypto'
-import { and, eq, gt, isNull, or } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/db/db'
-import { inviteCodesTable } from '@/db/schema'
+import { apiGrantsTable, inviteCodesTable, sessionsTable } from '@/db/schema'
 import { getCurrentUser, sha256 } from '@/utils/user'
 
 export async function GET() {
@@ -36,11 +36,40 @@ export async function DELETE(request: NextRequest) {
   if (!Number.isInteger(id) || id < 1) {
     return NextResponse.json({ error: '邀请码 ID 无效' }, { status: 400 })
   }
-  const [closed] = await getDb().update(inviteCodesTable)
-    .set({ expiresAt: new Date() })
-    .where(and(eq(inviteCodesTable.id, id), gt(inviteCodesTable.maxUses, inviteCodesTable.usedCount),
-      or(isNull(inviteCodesTable.expiresAt), gt(inviteCodesTable.expiresAt, new Date()))))
-    .returning({ id: inviteCodesTable.id })
-  if (!closed) return NextResponse.json({ error: '邀请码不存在、已关闭或已用完' }, { status: 404 })
+  const db = getDb()
+  if (request.nextUrl.searchParams.get('remove') === '1') {
+    const members = await db.select({ id: sessionsTable.id }).from(sessionsTable)
+      .where(eq(sessionsTable.inviteCodeId, id)).limit(1)
+    if (members.length) return NextResponse.json({ error: '先撤销由此邀请码加入的成员，才能删除邀请码' }, { status: 409 })
+    await db.transaction(async tx => {
+      await tx.delete(apiGrantsTable).where(eq(apiGrantsTable.inviteCodeId, id))
+      await tx.delete(inviteCodesTable).where(eq(inviteCodesTable.id, id))
+    })
+    return NextResponse.json({ ok: true })
+  }
+  const [closed] = await db.update(inviteCodesTable).set({ expiresAt: new Date() })
+    .where(eq(inviteCodesTable.id, id)).returning({ id: inviteCodesTable.id })
+  if (!closed) return NextResponse.json({ error: '邀请码不存在' }, { status: 404 })
   return NextResponse.json({ ok: true })
+}
+
+export async function PATCH(request: NextRequest) {
+  if (!(await getCurrentUser()).isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const input = await request.json().catch(() => null)
+  const id = Number(input?.id)
+  const maxUses = Number(input?.maxUses)
+  if (!Number.isInteger(id) || id < 1 || typeof input?.label !== 'string' || input.label.length > 120 ||
+      !Number.isInteger(maxUses) || maxUses < 1 || maxUses > 100 || typeof input?.teamAccess !== 'boolean' ||
+      typeof input?.active !== 'boolean') {
+    return NextResponse.json({ error: '邀请码参数无效' }, { status: 400 })
+  }
+  const db = getDb()
+  const [current] = await db.select().from(inviteCodesTable).where(eq(inviteCodesTable.id, id)).limit(1)
+  if (!current) return NextResponse.json({ error: '邀请码不存在' }, { status: 404 })
+  if (maxUses < current.usedCount) return NextResponse.json({ error: '使用上限不能低于已使用次数' }, { status: 400 })
+  const [updated] = await db.update(inviteCodesTable).set({
+    label: input.label.trim(), maxUses, teamAccess: input.teamAccess,
+    expiresAt: input.active ? null : new Date(),
+  }).where(eq(inviteCodesTable.id, id)).returning({ id: inviteCodesTable.id })
+  return NextResponse.json({ ok: Boolean(updated) })
 }

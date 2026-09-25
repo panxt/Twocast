@@ -9,7 +9,7 @@ const fields = [
 ] as const
 const secrets = new Set(['LLM_API_KEY', 'LLM_SEARCH_API_KEY', 'MINIMAX_TOKEN'])
 type Grant = { id: number; userId: number | null; inviteCodeId: number | null; capability: string; maxEpisodes: number; usedEpisodes: number }
-type User = { id: number; displayName: string | null; inviteCodeId: number | null; teamAccess: boolean }
+type User = { id: number; displayName: string | null; inviteCodeId: number | null; teamAccess: boolean; expiresAt: string }
 type Code = { id: number; label: string | null; usedCount: number; maxUses: number; teamAccess: boolean; expiresAt: string | null }
 const inviteState = (code: Code) => code.expiresAt && new Date(code.expiresAt).getTime() <= Date.now()
   ? '已关闭' : code.usedCount >= code.maxUses ? '已用完' : `可用 ${code.maxUses - code.usedCount} 次`
@@ -29,6 +29,8 @@ export default function SettingsPage() {
   const [memberRecovery, setMemberRecovery] = useState<{ userId: number; code: string } | null>(null)
   const [inviteLabel, setInviteLabel] = useState('')
   const [inviteTeamAccess, setInviteTeamAccess] = useState(false)
+  const [editingInvite, setEditingInvite] = useState<number | null>(null)
+  const [inviteDraft, setInviteDraft] = useState<{ label: string; maxUses: number; teamAccess: boolean; active: boolean }>({ label: '', maxUses: 1, teamAccess: false, active: true })
   const [grants, setGrants] = useState<Grant[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [codes, setCodes] = useState<Code[]>([])
@@ -124,6 +126,38 @@ export default function SettingsPage() {
     const data = await response.json()
     setMessage(response.ok ? '邀请码已关闭' : data.error || '关闭失败')
     if (response.ok) await loadTeam()
+  }
+  function editInvite(code: Code) {
+    setEditingInvite(code.id)
+    setInviteDraft({ label: code.label || '', maxUses: code.maxUses, teamAccess: code.teamAccess,
+      active: !code.expiresAt || new Date(code.expiresAt).getTime() > Date.now() })
+  }
+  async function saveInvite() {
+    const response = await fetch('/api/admin/invites', { method: 'PATCH', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id: editingInvite, ...inviteDraft }) })
+    const data = await response.json()
+    setMessage(response.ok ? '邀请码已更新' : data.error || '更新失败')
+    if (response.ok) { setEditingInvite(null); await loadTeam() }
+  }
+  async function removeInvite(id: number) {
+    if (!window.confirm('永久删除此邀请码及其共享 API 授权？此操作无法撤销。')) return
+    const response = await fetch(`/api/admin/invites?id=${id}&remove=1`, { method: 'DELETE' })
+    const data = await response.json()
+    setMessage(response.ok ? '邀请码已删除' : data.error || '删除失败')
+    if (response.ok) await loadTeam()
+  }
+  async function removeMember(id: number) {
+    if (!window.confirm('撤销此成员的登录和 API 授权？没有节目的测试账号会被删除；已有节目会保留。')) return
+    const response = await fetch(`/api/admin/members?id=${id}`, { method: 'DELETE' })
+    const data = await response.json()
+    setMessage(response.ok ? (data.retainedForTasks ? '成员访问已撤销，节目已保留' : '成员账号已删除') : data.error || '撤销失败')
+    if (response.ok) await loadTeam()
+  }
+  async function revokeOtherAdminSessions() {
+    if (!window.confirm('让除当前浏览器之外的所有管理员登录失效？当前管理员会话会保留。')) return
+    const response = await fetch('/api/admin/sessions', { method: 'DELETE' })
+    const data = await response.json()
+    setMessage(response.ok ? `已撤销 ${data.revoked} 个其他管理员会话；当前登录保留` : data.error || '撤销失败')
   }
   async function renewLoginCode() {
     const response = await fetch('/api/user/login-code', { method: 'POST' })
@@ -227,6 +261,11 @@ export default function SettingsPage() {
       {loginCode && <output className="block break-all rounded bg-gray-100 p-3 font-mono dark:bg-gray-800">{loginCode}</output>}
     </section>}
     {admin && <>
+      <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border p-5">
+        <div><h2 className="font-semibold">管理员登录</h2>
+          <p className="mt-1 text-sm text-gray-500">保留当前浏览器的管理员会话，让其他管理员令牌失效。</p></div>
+        <button type="button" onClick={revokeOtherAdminSessions} className="rounded border border-red-200 px-3 py-2 text-sm text-red-700">撤销其他管理员登录</button>
+      </section>
       {teamError && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
         {teamError} <button type="button" className="ml-2 underline" onClick={() => void loadTeam()}>重试</button>
       </p>}
@@ -243,12 +282,29 @@ export default function SettingsPage() {
         <div className="divide-y rounded-lg border px-3 text-sm dark:divide-gray-700 dark:border-gray-700">
           {teamLoading && codes.length === 0 && <p className="py-3 text-gray-500">正在加载邀请码…</p>}
           {!teamLoading && !teamError && codes.length === 0 && <p className="py-3 text-gray-500">还没有邀请码</p>}
-          {codes.map(code => <div key={code.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+          {codes.map(code => <div key={code.id} className="py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div><span className="font-medium">{code.label || `邀请码 #${code.id}`}</span>
               <p className="mt-1 text-xs text-gray-500">{code.teamAccess ? '团队成员' : '体验用户'} · {inviteState(code)} · 已加入 {code.usedCount} 人</p></div>
-            {inviteState(code).startsWith('可用') && <button onClick={() => closeInvite(code.id)}
-              className="rounded border border-red-200 px-3 py-1.5 text-xs text-red-700">关闭</button>}
-          </div>)}
+            <div className="flex gap-2"><button onClick={() => editInvite(code)} className="rounded border px-3 py-1.5 text-xs">编辑</button>
+              <button onClick={() => closeInvite(code.id)} className="rounded border px-3 py-1.5 text-xs">关闭</button>
+              {!users.some(user => user.inviteCodeId === code.id) && <button onClick={() => removeInvite(code.id)}
+                className="rounded border border-red-200 px-3 py-1.5 text-xs text-red-700">删除</button>}</div>
+          </div>
+          {editingInvite === code.id && <div className="mt-3 grid gap-2 rounded bg-gray-50 p-3 dark:bg-gray-900 sm:grid-cols-2">
+            <label className="text-xs">备注<input value={inviteDraft.label} maxLength={120} onChange={event => setInviteDraft({ ...inviteDraft, label: event.target.value })}
+              className="mt-1 w-full rounded border px-2 py-1.5 dark:bg-gray-800" /></label>
+            <label className="text-xs">最多使用次数<input type="number" min={code.usedCount || 1} max={100} value={inviteDraft.maxUses}
+              onChange={event => setInviteDraft({ ...inviteDraft, maxUses: Number(event.target.value) })}
+              className="mt-1 w-full rounded border px-2 py-1.5 dark:bg-gray-800" /></label>
+            <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={inviteDraft.teamAccess}
+              onChange={event => setInviteDraft({ ...inviteDraft, teamAccess: event.target.checked })} />新加入者可访问团队内容</label>
+            <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={inviteDraft.active}
+              onChange={event => setInviteDraft({ ...inviteDraft, active: event.target.checked })} />允许继续使用</label>
+            <div className="flex gap-2"><button onClick={saveInvite} className="rounded bg-indigo-600 px-3 py-1.5 text-xs text-white">保存</button>
+              <button onClick={() => setEditingInvite(null)} className="rounded border px-3 py-1.5 text-xs">取消</button></div>
+          </div>}
+        </div>)}
         </div>
       </section>
       <section className="space-y-3 rounded-xl border p-5">
@@ -260,13 +316,14 @@ export default function SettingsPage() {
           {users.map(user => <div key={user.id} className="py-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div><span className="font-medium">{user.displayName || `用户 #${user.id}`}</span>
-              <p className="mt-1 text-xs text-gray-500">#{user.id} · {user.teamAccess ? '团队成员' : '体验用户'}
+              <p className="mt-1 text-xs text-gray-500">#{user.id} · {new Date(user.expiresAt).getTime() <= Date.now() ? '已撤销' : user.teamAccess ? '团队成员' : '体验用户'}
                 {user.inviteCodeId ? ` · 来自 ${codes.find(code => code.id === user.inviteCodeId)?.label || `邀请码 #${user.inviteCodeId}`}` : ''}</p></div>
             <div className="flex gap-2">
               <button onClick={() => resetMemberLoginCode(user.id)} className="rounded border px-3 py-1.5 text-xs">重置登录码</button>
               <button onClick={() => setTeamAccess(user.id, !user.teamAccess)} className="rounded border px-3 py-1.5 text-xs">
                 {user.teamAccess ? '移出团队' : '加入团队'}
               </button>
+              <button onClick={() => removeMember(user.id)} className="rounded border border-red-200 px-3 py-1.5 text-xs text-red-700">撤销访问</button>
             </div>
           </div>
           {memberRecovery?.userId === user.id && <output className="mt-3 block break-all rounded bg-amber-50 p-3 font-mono text-xs text-amber-950 dark:bg-amber-950 dark:text-amber-100">
