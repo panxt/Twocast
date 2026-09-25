@@ -1,6 +1,6 @@
 import 'server-only'
 import { createCipheriv, createDecipheriv, randomBytes } from 'crypto'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import { getDb } from '@/db/db'
 import { appSettingsTable, userApiSettingsTable } from '@/db/schema'
 import { currentApiContext } from './api-context'
@@ -38,6 +38,12 @@ export async function getSetting(key: SettingKey): Promise<string> {
   return rows[0] ? decrypt(rows[0].encryptedValue) : (process.env[key] || '')
 }
 
+export async function getSettings(keys: readonly SettingKey[]): Promise<Record<SettingKey, string>> {
+  const rows = await getDb().select().from(appSettingsTable).where(inArray(appSettingsTable.key, [...keys]))
+  const stored = new Map(rows.map(row => [row.key, decrypt(row.encryptedValue)]))
+  return Object.fromEntries(keys.map(key => [key, stored.get(key) ?? process.env[key] ?? ''])) as Record<SettingKey, string>
+}
+
 export async function setSetting(key: SettingKey, value: string) {
   await getDb().insert(appSettingsTable).values({ key, encryptedValue: encrypt(value), updatedAt: new Date() })
     .onConflictDoUpdate({ target: appSettingsTable.key, set: { encryptedValue: encrypt(value), updatedAt: new Date() } })
@@ -48,6 +54,14 @@ export async function getUserSetting(userId: number, key: SettingKey): Promise<s
     eq(userApiSettingsTable.userId, userId), eq(userApiSettingsTable.key, key),
   )).limit(1)
   return rows[0] ? decrypt(rows[0].encryptedValue) : ''
+}
+
+export async function getUserSettings(userId: number, keys: readonly SettingKey[]): Promise<Record<SettingKey, string>> {
+  const rows = await getDb().select().from(userApiSettingsTable).where(and(
+    eq(userApiSettingsTable.userId, userId), inArray(userApiSettingsTable.key, [...keys]),
+  ))
+  const stored = new Map(rows.map(row => [row.key, decrypt(row.encryptedValue)]))
+  return Object.fromEntries(keys.map(key => [key, stored.get(key) ?? ''])) as Record<SettingKey, string>
 }
 
 export async function setUserSetting(userId: number, key: SettingKey, value: string) {
