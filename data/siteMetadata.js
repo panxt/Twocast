@@ -1,8 +1,8 @@
 /** @type {import("pliny/config").PlinyConfig } */
 const siteMetadata = {
-  title: '驿路通·声笺',
-  author: '驿路通',
-  headerTitle: '驿路通·声笺',
+  title: '驿·声笺',
+  author: '驿·声笺',
+  headerTitle: '驿·声笺',
   description: '小团队的资料、播客与声音工作台',
   language: 'zh',
   theme: 'system', // system, dark or light

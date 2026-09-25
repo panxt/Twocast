@@ -2,6 +2,8 @@ export type AudioOutput = {
   location: string;
   duration: number;
   timedScript?: { role: string; text: string; startMs: number }[];
+  backupLocation?: string;
+  backupLocations?: string[];
 }
 
 export interface AudioResult {

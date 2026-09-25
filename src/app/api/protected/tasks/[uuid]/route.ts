@@ -21,7 +21,7 @@ export async function DELETE(_: NextRequest, context: { params: Promise<{ uuid: 
     return NextResponse.json({ error: '生成中的任务暂不能删除，请等待完成' }, { status: 409 })
   }
   const audioOutput = taskGetStepItem(task, PodcastStep.Audio)?.output
-  const audioFiles = [audioOutput?.location, audioOutput?.backupLocation]
+  const audioFiles = [...new Set([audioOutput?.location, audioOutput?.backupLocation, ...(audioOutput?.backupLocations || [])])]
     .filter((location): location is string => typeof location === 'string' && location.startsWith('supabase:'))
     .map(location => location.slice('supabase:'.length))
   if (audioFiles.length) await removeAudio(audioFiles)

@@ -38,10 +38,10 @@ async function main() {
     assert.equal(metadata.status, 0, metadata.stderr.toString())
     const tags = JSON.parse(metadata.stdout.toString()).format.tags
     assert.equal(tags.title, '测试节目')
-    assert.equal(tags.artist, '驿路通')
-    assert.equal(tags.album, '驿路通·声笺')
+    assert.equal(tags.artist, '驿·声笺')
+    assert.equal(tags.album, '驿·声笺')
     assert.match(tags['lyrics-zho'], /\[00:02\.0\d\]嘉宾: 第二段/)
-    assert.match(tags['lyrics-zho'], /\[ar:驿路通\]/)
+    assert.match(tags['lyrics-zho'], /\[ar:驿·声笺\]/)
     assert.equal(embedScript(output.audio, output.timedScript, output.duration, '测试节目').length, output.audio.length)
     assert.match(toLrc(output.timedScript, '测试节目'), /\[00:02\.0\d\]嘉宾: 第二段/)
     const legacy = await normalizeExistingMp3(Buffer.concat(parts), [
