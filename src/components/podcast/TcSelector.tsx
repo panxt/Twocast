@@ -49,16 +49,19 @@ export function TcSelector({value, onChange, options, title}: {title?: string, v
     }
     const optionClass = 'block w-full px-3 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm hover:bg-indigo-50 dark:hover:bg-indigo-900/30 relative z-10';
 
+    const selectedLabel = options.find(option => option.id === value)?.label || '请选择';
+
     return (
-        <div className="relative flex-shrink-0" ref={containerRef}>
+        <div className="relative min-w-0" ref={containerRef}>
+          {title && <span className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">{title}</span>}
           <button type="button"
               onClick={() => setIsOpen(!isOpen)}
-            aria-label={title}
+            aria-label={title ? `${title}：${selectedLabel}` : selectedLabel}
             aria-expanded={isOpen}
-            className="relative flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left dark:border-slate-700 dark:bg-slate-800 sm:min-w-[120px]"
+            className="relative flex w-full min-w-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left dark:border-slate-700 dark:bg-slate-800"
           >
             <div className="absolute inset-0 bg-gradient-to-br from-white/30 to-transparent pointer-events-none rounded-lg sm:rounded-xl"></div>
-            <span className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-200 relative z-10">{options.find(option => option.id === value)?.label}</span>
+            <span className="relative z-10 min-w-0 truncate text-xs font-semibold text-gray-700 dark:text-gray-200 sm:text-sm">{selectedLabel}</span>
             <ChevronDownIcon className="w-3 h-3 sm:w-4 sm:h-4 text-gray-500 ml-auto relative z-10" />
           </button>
           

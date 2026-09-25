@@ -30,13 +30,14 @@ interface UserInputProps {
 export function UserInput({ onSubmitSuccess }: UserInputProps) {
   const { t, i18n } = useTranslation('podcast');
   const locale = (useParams()?.locale || 'zh') as LocaleTypes;
-  const [topic, setTopic] = useState("");
+  const [drafts, setDrafts] = useState<Partial<Record<PodcastInputType, string>>>({});
   const [activeTab, setActiveTab] = useState(PodcastInputType.Topic);
+  const topic = drafts[activeTab] || '';
+  const setTopic = (value: string) => setDrafts(current => ({ ...current, [activeTab]: value }));
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [uploadPercent, setUploadPercent] = useState<number | null>(null);
   const [submitPhase, setSubmitPhase] = useState<'upload' | 'processing'>('processing');
-  const [readyToSubmit, setReadyToSubmit] = useState(false);
   const [platform, setPlatform] = useState(Platform.Minimax.toString());
   const [voiceId_1, setVoiceId_1] = useState('');
   const [voiceId_2, setVoiceId_2] = useState('');
@@ -49,6 +50,8 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
   const [voiceLoadError, setVoiceLoadError] = useState('');
   const [voiceReload, setVoiceReload] = useState(0);
   const audioRefs = useRef<{ [key: string]: HTMLAudioElement | null }>({});
+  const readyToSubmit = Boolean(platform && voiceId_1 && voiceId_2 &&
+    (activeTab === PodcastInputType.File ? file : topic.trim()));
 
   const tabs = [
     { id: PodcastInputType.Topic, label: t('tabs.topic'), icon: "🧠" },
@@ -164,21 +167,6 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
   }, [platform, voices, playingVoiceId, platformDefaultVoices])
 
   useEffect(() => {
-    const isReadyToSubmit = () => {
-      if (!platform || !voiceId_1 || !voiceId_2) {
-        return false;
-      }
-      if (activeTab == PodcastInputType.File) {
-        return !!file;
-      } else {
-        return !!topic.trim();
-      }
-    }
-    setReadyToSubmit(isReadyToSubmit());
-    // console.log('file', file, 'topic', topic, 'readyToSubmit', readyToSubmit);
-  }, [file, topic, activeTab, platform, voiceId_1, voiceId_2]);
-
-  useEffect(() => {
     // 当 platform 或 voices 变化时，重置播放状态
     setPlayingVoiceId(null);
     // 暂停所有 audio
@@ -228,8 +216,8 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
       });
       if (response.data?.code !== 0) throw new Error(response.data?.message || '提交失败');
       toast.success("任务已提交");
-      setTopic("");
-      resetFile();
+      setDrafts(current => ({ ...current, [activeTab]: '' }));
+      if (activeTab === PodcastInputType.File) resetFile();
       // setActiveTab(PodcastInputType.Topic);
       onSubmitSuccess?.();
     } catch (error) {
@@ -244,7 +232,6 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
   const handleTabChange = (tabId: PodcastInputType) => {
     if (loading) return;
     setActiveTab(tabId);
-    setTopic(""); // 清空输入内容
   };
 
   const renderInputSection = () => {
@@ -416,9 +403,10 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
         </div>}
 
         {/* Bottom Section with Speed Selector and Create Button */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5 lg:items-end">
           <TcSelector value={platform} onChange={(v) => {
             setPlatform(v);
+            setOutputLanguage(current => languages[v as Platform]?.some(option => option.id === current) ? current : 'auto');
             if (v.includes('custom')) {
               setVoiceId_1('');
               setVoiceId_2('');
@@ -426,15 +414,21 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
           }} options={platforms} title={t('platform')} />
           {selectType == SelectType.Select && <TcSelector value={voiceId_1} onChange={setVoiceId_1} options={voiceOptions} title={t('voice_1')} />}
           {selectType == SelectType.Select && <TcSelector value={voiceId_2} onChange={setVoiceId_2} options={voiceOptions} title={t('voice_2')} />}
-          {selectType == SelectType.Input && <input type="text" value={voiceId_1} onChange={(e) => setVoiceId_1(e.target.value)} placeholder="Voice id" className="w-full sm:w-32 px-3 sm:px-4 py-2 sm:py-3 text-sm bg-gradient-to-br from-white/90 to-white/60 dark:from-gray-800/90 dark:to-gray-900/60 backdrop-blur-sm border-0 rounded-lg sm:rounded-xl focus:outline-none focus:ring-0 text-gray-800 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 resize-none" style={{ boxShadow: 'inset 0 4px 20px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.4)' }} />}
-          {selectType == SelectType.Input && <input type="text" value={voiceId_2} onChange={(e) => setVoiceId_2(e.target.value)} placeholder="Voice id" className="w-full sm:w-32 px-3 sm:px-4 py-2 sm:py-3 text-sm bg-gradient-to-br from-white/90 to-white/60 dark:from-gray-800/90 dark:to-gray-900/60 backdrop-blur-sm border-0 rounded-lg sm:rounded-xl focus:outline-none focus:ring-0 text-gray-800 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 resize-none" style={{ boxShadow: 'inset 0 4px 20px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.4)' }} />}
+          {selectType == SelectType.Input && <label className="min-w-0 text-xs font-medium text-slate-600 dark:text-slate-300">{t('voice_1')}
+            <input type="text" value={voiceId_1} onChange={(e) => setVoiceId_1(e.target.value)} placeholder="Voice ID"
+              className="mt-1 block w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+          </label>}
+          {selectType == SelectType.Input && <label className="min-w-0 text-xs font-medium text-slate-600 dark:text-slate-300">{t('voice_2')}
+            <input type="text" value={voiceId_2} onChange={(e) => setVoiceId_2(e.target.value)} placeholder="Voice ID"
+              className="mt-1 block w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+          </label>}
           <TcSelector value={outputLanguage} onChange={setOutputLanguage} options={languages[platform as Platform]} title={t('output_language')} />
 
           {/* Create Button */}
           <button
             onClick={handleSubmit}
             disabled={!readyToSubmit || loading}
-            className="relative flex flex-1 items-center justify-center gap-2 overflow-hidden rounded-xl bg-indigo-700 px-6 py-3 font-semibold text-white hover:bg-indigo-800 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-initial"
+            className="relative flex min-h-12 items-center justify-center gap-2 overflow-hidden rounded-xl bg-indigo-700 px-6 py-3 font-semibold text-white hover:bg-indigo-800 disabled:cursor-not-allowed disabled:opacity-50 sm:col-span-2 lg:col-span-1"
           >
             <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent pointer-events-none rounded-lg sm:rounded-xl"></div>
             {loading ? (
