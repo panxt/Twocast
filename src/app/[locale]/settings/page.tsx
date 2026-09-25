@@ -24,6 +24,7 @@ export default function SettingsPage() {
   const [displayName, setDisplayName] = useState('')
   const [inviteCode, setInviteCode] = useState('')
   const [loginCode, setLoginCode] = useState('')
+  const [memberRecovery, setMemberRecovery] = useState<{ userId: number; code: string } | null>(null)
   const [inviteLabel, setInviteLabel] = useState('')
   const [inviteTeamAccess, setInviteTeamAccess] = useState(false)
   const [grants, setGrants] = useState<Grant[]>([])
@@ -130,6 +131,16 @@ export default function SettingsPage() {
     setMessage(response.ok ? (teamAccess ? '已加入团队' : '已改为体验用户') : data.error || '更新失败')
     if (response.ok) await load()
   }
+  async function resetMemberLoginCode(userId: number) {
+    const member = users.find(item => item.id === userId)
+    if (!window.confirm(`为「${member?.displayName || `用户 #${userId}`}」生成新登录码？旧登录码会立即失效，请安全地把新码交给本人。`)) return
+    const response = await fetch('/api/admin/members/login-code', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ userId }),
+    })
+    const data = await response.json()
+    setMemberRecovery(response.ok ? { userId, code: data.code } : null)
+    setMessage(response.ok ? '新登录码只显示这一次，请现在保存并交给该成员。' : data.error || '重置失败')
+  }
 
   if (!ready) return <main className="mx-auto max-w-3xl p-8">正在加载…</main>
   return <main className="mx-auto max-w-3xl space-y-8 p-6 sm:p-8">
@@ -192,11 +203,19 @@ export default function SettingsPage() {
       <section className="space-y-3 rounded-xl border p-5">
         <h2 className="text-lg font-semibold">团队成员</h2>
         <p className="text-sm text-gray-500">旧邀请码和已有账号默认是体验用户；可在这里逐个加入团队。成员仅能管理自己的节目。</p>
-        <div className="divide-y text-sm dark:divide-gray-700">{users.map(user => <div key={user.id} className="flex items-center justify-between gap-3 py-2">
-          <span>用户 #{user.id} {user.displayName || ''} · {user.teamAccess ? '团队成员' : '体验用户'}</span>
-          <button onClick={() => setTeamAccess(user.id, !user.teamAccess)} className="rounded border px-3 py-1.5 text-xs">
-            {user.teamAccess ? '移出团队' : '加入团队'}
-          </button>
+        <div className="divide-y text-sm dark:divide-gray-700">{users.map(user => <div key={user.id} className="py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span>用户 #{user.id} {user.displayName || ''} · {user.teamAccess ? '团队成员' : '体验用户'}</span>
+            <div className="flex gap-2">
+              <button onClick={() => resetMemberLoginCode(user.id)} className="rounded border px-3 py-1.5 text-xs">重置登录码</button>
+              <button onClick={() => setTeamAccess(user.id, !user.teamAccess)} className="rounded border px-3 py-1.5 text-xs">
+                {user.teamAccess ? '移出团队' : '加入团队'}
+              </button>
+            </div>
+          </div>
+          {memberRecovery?.userId === user.id && <output className="mt-3 block break-all rounded bg-amber-50 p-3 font-mono text-xs text-amber-950 dark:bg-amber-950 dark:text-amber-100">
+            {memberRecovery.code}
+          </output>}
         </div>)}</div>
       </section>
       <section className="space-y-3 rounded-xl border p-5">
