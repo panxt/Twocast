@@ -2,15 +2,15 @@ import 'server-only'
 import { and, eq, gt, isNull, or, sql } from 'drizzle-orm'
 import { getDb } from '@/db/db'
 import { apiGrantsTable } from '@/db/schema'
-import { getSetting, getUserSetting, SettingKey } from './settings'
+import { getSettings, getUserSettings, SettingKey } from './settings'
 import { ApiAccess, ApiSource } from './api-context'
 
 type User = { userId: number; inviteCodeId: number | null; isAdmin: boolean }
 type Capability = 'llm' | 'tts'
 
 async function configured(userId: number, keys: SettingKey[], own: boolean) {
-  const values = await Promise.all(keys.map(key => own ? getUserSetting(userId, key) : getSetting(key)))
-  return values.every(Boolean)
+  const values = own ? await getUserSettings(userId, keys) : await getSettings(keys)
+  return keys.every(key => Boolean(values[key]))
 }
 
 export async function availableApiAccess(user: User, needsSearch: boolean) {
