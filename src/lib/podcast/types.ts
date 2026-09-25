@@ -30,8 +30,11 @@ export type TaskUserInput = {
   language?: string
   fileName?: string
   fileLocation?: string
-  apiAccess?: { llm: 'own' | 'grant' | 'admin'; tts: 'own' | 'grant' | 'admin' }
+  apiAccess?: { llm: 'own' | 'member' | 'grant' | 'admin'; tts: 'own' | 'member' | 'grant' | 'admin' }
+  apiKeyOwners?: { llm?: number; tts?: number }
+  apiKeyShareIds?: { llm?: number; tts?: number }
   reservedGrantIds?: number[]
+  reservedMemberShareIds?: number[]
 }
 
 export enum PodcastStep {

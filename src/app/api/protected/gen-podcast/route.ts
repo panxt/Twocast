@@ -104,7 +104,7 @@ export async function POST(req: Request) {
       fileLocation = await storeUpload(`${taskUuid}.${fileExtension}`, fileBytes,
         fileExtension === 'pdf' ? 'application/pdf' : 'text/plain')
     } catch (error) {
-      await releaseApiGrants(reservation.grantIds)
+      await releaseApiGrants(reservation.grantIds, reservation.memberShareIds)
       return new Response(JSON.stringify({ error: '文件保存失败，请稍后重试' }),
         { status: 500, headers: { 'content-type': 'application/json' } })
     }
@@ -132,7 +132,10 @@ export async function POST(req: Request) {
       fileName,
       fileLocation,
       apiAccess: reservation.access,
+      apiKeyOwners: reservation.keyOwners,
+      apiKeyShareIds: reservation.keyShareIds,
       reservedGrantIds: reservation.grantIds,
+      reservedMemberShareIds: reservation.memberShareIds,
     },
     status: TaskStatus.Pending,
     consumedCredits: 0,
@@ -169,7 +172,7 @@ export async function POST(req: Request) {
   try {
     task.id = (await queryWrap(getDb().insert(tasksTable).values(task).returning({ id: tasksTable.id })))[0].id!
   } catch (error) {
-    await releaseApiGrants(reservation.grantIds)
+    await releaseApiGrants(reservation.grantIds, reservation.memberShareIds)
     if (fileLocation) await removeUpload(fileLocation).catch(() => undefined)
     throw error
   }
@@ -180,7 +183,7 @@ export async function POST(req: Request) {
     } catch (error) {
       await getDb().update(tasksTable).set({ status: TaskStatus.Failed,
         statusReason: { msg: '后台任务启动失败' } }).where(eq(tasksTable.id, task.id))
-      await releaseApiGrants(reservation.grantIds)
+      await releaseApiGrants(reservation.grantIds, reservation.memberShareIds)
       throw error
     }
     return respData(task)

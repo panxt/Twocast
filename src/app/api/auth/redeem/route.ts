@@ -40,7 +40,10 @@ export async function POST(request: NextRequest) {
   if (!admin) {
     // Conditional UPDATE consumes at most max_uses, even with concurrent requests.
     const consumed = await db.update(inviteCodesTable)
-      .set({ usedCount: sql`${inviteCodesTable.usedCount} + 1` })
+      .set({ usedCount: sql`${inviteCodesTable.usedCount} + 1`,
+        dailyUsedOn: sql`to_char(now() AT TIME ZONE 'Asia/Shanghai', 'YYYY-MM-DD')`,
+        dailyUsedCount: sql`CASE WHEN ${inviteCodesTable.dailyUsedOn} = to_char(now() AT TIME ZONE 'Asia/Shanghai', 'YYYY-MM-DD') THEN ${inviteCodesTable.dailyUsedCount} + 1 ELSE 1 END`,
+      })
       .where(and(
         eq(inviteCodesTable.codeHash, sha256(code.toUpperCase())),
         sql`${inviteCodesTable.usedCount} < ${inviteCodesTable.maxUses}`,

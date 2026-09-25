@@ -10,9 +10,14 @@ const fields = [
 const secrets = new Set(['LLM_API_KEY', 'LLM_SEARCH_API_KEY', 'MINIMAX_TOKEN'])
 type Grant = { id: number; userId: number | null; inviteCodeId: number | null; capability: string; maxEpisodes: number; usedEpisodes: number }
 type User = { id: number; displayName: string | null; inviteCodeId: number | null; teamAccess: boolean; expiresAt: string }
-type Code = { id: number; label: string | null; usedCount: number; maxUses: number; teamAccess: boolean; expiresAt: string | null }
+type ApiShare = { id: number; ownerUserId: number; recipientUserId: number; capability: 'llm' | 'tts';
+  maxEpisodes: number; usedEpisodes: number; active: boolean }
+type Code = { id: number; label: string | null; usedCount: number; maxUses: number;
+  dailyMaxUses: number | null; dailyUsedCount: number; dailyUsedOn: string | null;
+  teamAccess: boolean; expiresAt: string | null }
+const chinaToday = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
 const inviteState = (code: Code) => code.expiresAt && new Date(code.expiresAt).getTime() <= Date.now()
-  ? '已关闭' : code.usedCount >= code.maxUses ? '已用完' : `可用 ${code.maxUses - code.usedCount} 次`
+  ? '已关闭' : code.usedCount >= code.maxUses ? '已用完' : `剩余 ${code.maxUses - code.usedCount} 次`
 
 export default function SettingsPage() {
   const [admin, setAdmin] = useState(false)
@@ -29,9 +34,19 @@ export default function SettingsPage() {
   const [memberRecovery, setMemberRecovery] = useState<{ userId: number; code: string } | null>(null)
   const [inviteLabel, setInviteLabel] = useState('')
   const [inviteTeamAccess, setInviteTeamAccess] = useState(false)
+  const [inviteMaxUses, setInviteMaxUses] = useState(1)
+  const [inviteDailyMaxUses, setInviteDailyMaxUses] = useState<number | ''>('')
   const [editingInvite, setEditingInvite] = useState<number | null>(null)
-  const [inviteDraft, setInviteDraft] = useState<{ label: string; maxUses: number; teamAccess: boolean; active: boolean }>({ label: '', maxUses: 1, teamAccess: false, active: true })
+  const [inviteDraft, setInviteDraft] = useState<{ label: string; maxUses: number; dailyMaxUses: number | ''; teamAccess: boolean; active: boolean }>({ label: '', maxUses: 1, dailyMaxUses: '', teamAccess: false, active: true })
   const [grants, setGrants] = useState<Grant[]>([])
+  const [shares, setShares] = useState<ApiShare[]>([])
+  const [shareUsers, setShareUsers] = useState<{ id: number; displayName: string | null }[]>([])
+  const [currentUserId, setCurrentUserId] = useState(0)
+  const [shareRecipient, setShareRecipient] = useState('')
+  const [shareCapability, setShareCapability] = useState<'llm' | 'tts'>('llm')
+  const [shareEpisodes, setShareEpisodes] = useState(3)
+  const [shareLimits, setShareLimits] = useState<Record<number, number>>({})
+  const [shareError, setShareError] = useState('')
   const [users, setUsers] = useState<User[]>([])
   const [codes, setCodes] = useState<Code[]>([])
   const [teamLoading, setTeamLoading] = useState(false)
@@ -55,9 +70,22 @@ export default function SettingsPage() {
     } finally { setTeamLoading(false) }
   }
 
+  async function loadShares() {
+    try {
+      const response = await fetch('/api/user/api-shares')
+      if (!response.ok) throw new Error('API 分享列表加载失败')
+      const data = await response.json()
+      setShares(data.shares || [])
+      setShareUsers(data.users || [])
+      setShareLimits(Object.fromEntries((data.shares || []).map((share: ApiShare) => [share.id, share.maxEpisodes])))
+      setShareError('')
+    } catch (error) { setShareError(error instanceof Error ? error.message : 'API 分享列表加载失败') }
+  }
+
   async function load(refreshTeam = true) {
     const me = await fetch('/api/auth/me').then(response => response.json())
     setAdmin(Boolean(me.isAdmin))
+    setCurrentUserId(me.userId || 0)
     setDisplayName(me.displayName || '')
     const response = await fetch(me.isAdmin ? '/api/admin/settings' : '/api/user/settings')
     if (!response.ok) { setMessage('请先登录'); setReady(true); return }
@@ -74,6 +102,7 @@ export default function SettingsPage() {
     setAccess(data.access || null)
     setReady(true)
     if (me.isAdmin && refreshTeam) void loadTeam()
+    if (refreshTeam) void loadShares()
   }
   // Initial data is loaded once; later updates call load or loadTeam explicitly.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -113,7 +142,8 @@ export default function SettingsPage() {
   async function createInvite() {
     const response = await fetch('/api/admin/invites', {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ maxUses: 1, label: inviteLabel, teamAccess: inviteTeamAccess }),
+      body: JSON.stringify({ maxUses: inviteMaxUses, dailyMaxUses: inviteDailyMaxUses || null,
+        label: inviteLabel, teamAccess: inviteTeamAccess }),
     })
     const data = await response.json()
     setInviteCode(response.ok ? data.code : '')
@@ -129,7 +159,7 @@ export default function SettingsPage() {
   }
   function editInvite(code: Code) {
     setEditingInvite(code.id)
-    setInviteDraft({ label: code.label || '', maxUses: code.maxUses, teamAccess: code.teamAccess,
+    setInviteDraft({ label: code.label || '', maxUses: code.maxUses, dailyMaxUses: code.dailyMaxUses || '', teamAccess: code.teamAccess,
       active: !code.expiresAt || new Date(code.expiresAt).getTime() > Date.now() })
   }
   async function saveInvite() {
@@ -158,6 +188,24 @@ export default function SettingsPage() {
     const response = await fetch('/api/admin/sessions', { method: 'DELETE' })
     const data = await response.json()
     setMessage(response.ok ? `已撤销 ${data.revoked} 个其他管理员会话；当前登录保留` : data.error || '撤销失败')
+  }
+  async function createShare() {
+    const response = await fetch('/api/user/api-shares', { method: 'POST',
+      headers: { 'content-type': 'application/json' }, body: JSON.stringify({
+        recipientUserId: Number(shareRecipient), capability: shareCapability, maxEpisodes: shareEpisodes,
+      }) })
+    const data = await response.json()
+    setMessage(response.ok ? '已分享调用额度；对方看不到你的密钥' : data.error || '分享失败')
+    if (response.ok) await loadShares()
+  }
+  async function updateShare(share: ApiShare, active = share.active) {
+    const response = await fetch('/api/user/api-shares', { method: 'PATCH',
+      headers: { 'content-type': 'application/json' }, body: JSON.stringify({
+        id: share.id, active, maxEpisodes: shareLimits[share.id],
+      }) })
+    const data = await response.json()
+    setMessage(response.ok ? '分享设置已更新' : data.error || '更新失败')
+    if (response.ok) await loadShares()
   }
   async function renewLoginCode() {
     const response = await fetch('/api/user/login-code', { method: 'POST' })
@@ -220,7 +268,8 @@ export default function SettingsPage() {
     {!admin && access && <section className="rounded-xl border p-4 text-sm">
       <h2 className="font-semibold">当前可用权限</h2>
       {(['llm', 'tts'] as const).map(key => <p key={key} className="mt-2">
-        {key === 'llm' ? '大模型' : '语音'}：{access[key]?.error || (access[key]?.source === 'own' ? '使用自己的 API' : '使用管理员授权额度')}
+        {key === 'llm' ? '大模型' : '语音'}：{access[key]?.error || (access[key]?.source === 'own' ? '使用自己的 API'
+          : access[key]?.source === 'member' ? '使用成员分享额度' : '使用管理员授权额度')}
       </p>)}
       <p className="mt-2 text-gray-500">按主题生成需要额外配置搜索模型；管理员授权按完整节目计数。</p>
     </section>}
@@ -254,6 +303,36 @@ export default function SettingsPage() {
       </label>)}</div>
       <button onClick={save} className="rounded-lg bg-indigo-600 px-5 py-2 text-white">保存配置</button>
     </section>
+    <section className="space-y-3 rounded-xl border p-5">
+      <h2 className="text-lg font-semibold">成员 API 分享</h2>
+      <p className="text-sm text-gray-500">分享的是服务端调用额度，不显示或发送密钥明文。你可以随时暂停分享或调整总期数；自己的密钥停用后分享也会停止。</p>
+      {shareError && <p role="alert" className="text-sm text-red-600">{shareError} <button onClick={loadShares} className="underline">重试</button></p>}
+      {!admin && <div className="flex flex-wrap gap-2">
+        <select aria-label="分享给成员" value={shareRecipient} onChange={event => setShareRecipient(event.target.value)} className="rounded border px-2 py-2 dark:bg-gray-800">
+          <option value="">选择接收成员</option>
+          {shareUsers.filter(item => item.id !== currentUserId).map(item => <option key={item.id} value={item.id}>{item.displayName || `用户 #${item.id}`}</option>)}
+        </select>
+        <select aria-label="分享能力" value={shareCapability} onChange={event => setShareCapability(event.target.value as 'llm' | 'tts')}
+          className="rounded border px-2 py-2 dark:bg-gray-800"><option value="llm">大模型</option><option value="tts">MiniMax 语音</option></select>
+        <label className="text-sm">总期数<input type="number" min="1" max="1000" value={shareEpisodes}
+          onChange={event => setShareEpisodes(Number(event.target.value))} className="ml-2 w-20 rounded border px-2 py-2 dark:bg-gray-800" /></label>
+        <button onClick={createShare} disabled={!shareRecipient} className="rounded bg-indigo-600 px-4 py-2 text-sm text-white disabled:opacity-50">分享额度</button>
+      </div>}
+      <div className="divide-y text-sm dark:divide-gray-700">{shares.length === 0 && !shareError && <p className="py-2 text-gray-500">暂无成员 API 分享</p>}
+        {shares.map(share => <div key={share.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
+          <span>{shareUsers.find(item => item.id === share.ownerUserId)?.displayName || `用户 #${share.ownerUserId}`} → {shareUsers.find(item => item.id === share.recipientUserId)?.displayName || `用户 #${share.recipientUserId}`}
+            {' · '}{share.capability === 'llm' ? '大模型' : '语音'} · 已用 {share.usedEpisodes}/{share.maxEpisodes} 期 · {share.active ? '启用' : '暂停'}</span>
+          {(admin || share.ownerUserId === currentUserId) && <div className="flex items-center gap-2">
+            <input aria-label={`分享 #${share.id} 总期数`} type="number" min={share.usedEpisodes || 1} max="1000"
+              value={shareLimits[share.id] ?? share.maxEpisodes}
+              onChange={event => setShareLimits({ ...shareLimits, [share.id]: Number(event.target.value) })}
+              className="w-20 rounded border px-2 py-1 dark:bg-gray-800" />
+            <button onClick={() => updateShare(share)} className="rounded border px-2 py-1">保存额度</button>
+            <button onClick={() => updateShare(share, !share.active)} className="rounded border px-2 py-1">{share.active ? '暂停' : '启用'}</button>
+          </div>}
+        </div>)}
+      </div>
+    </section>
     {!admin && <section className="space-y-3 rounded-xl border p-5">
       <h2 className="text-lg font-semibold">个人登录码</h2>
       <p className="text-sm text-gray-500">更换设备或会话过期后，用个人登录码恢复同一个账户及文件。</p>
@@ -275,7 +354,14 @@ export default function SettingsPage() {
         <p className="text-sm text-gray-500">体验用户只能看自己的内容；团队成员还能查看被明确共享到团队的节目。</p>
         <div className="flex flex-col gap-2 sm:flex-row"><input placeholder="备注，例如：朋友 A" value={inviteLabel}
           onChange={event => setInviteLabel(event.target.value)} className="min-w-0 flex-1 rounded border px-3 py-2 dark:bg-gray-800" />
-          <button onClick={createInvite} className="whitespace-nowrap rounded bg-indigo-600 px-4 py-2 text-white">生成单次邀请码</button></div>
+          <button onClick={createInvite} className="whitespace-nowrap rounded bg-indigo-600 px-4 py-2 text-white">生成邀请码</button></div>
+        <div className="flex flex-wrap gap-3 text-sm">
+          <label>总共可用<input type="number" min="1" max="1000" value={inviteMaxUses}
+            onChange={event => setInviteMaxUses(Number(event.target.value))} className="ml-2 w-20 rounded border px-2 py-1 dark:bg-gray-800" />次</label>
+          <label>每日参考<input type="number" min="1" max="1000" placeholder="不设" value={inviteDailyMaxUses}
+            onChange={event => setInviteDailyMaxUses(event.target.value === '' ? '' : Number(event.target.value))}
+            className="ml-2 w-20 rounded border px-2 py-1 dark:bg-gray-800" />次（仅提醒，不阻止兑换）</label>
+        </div>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={inviteTeamAccess}
           onChange={event => setInviteTeamAccess(event.target.checked)} />将受邀者加入团队</label>
         {inviteCode && <output className="block break-all rounded bg-gray-100 p-3 font-mono dark:bg-gray-800">{inviteCode}</output>}
@@ -285,7 +371,8 @@ export default function SettingsPage() {
           {codes.map(code => <div key={code.id} className="py-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div><span className="font-medium">{code.label || `邀请码 #${code.id}`}</span>
-              <p className="mt-1 text-xs text-gray-500">{code.teamAccess ? '团队成员' : '体验用户'} · {inviteState(code)} · 已加入 {code.usedCount} 人</p></div>
+              <p className="mt-1 text-xs text-gray-500">{code.teamAccess ? '团队成员' : '体验用户'} · {inviteState(code)} · 总计 {code.usedCount}/{code.maxUses} 次
+                {code.dailyMaxUses ? ` · 今日 ${code.dailyUsedOn === chinaToday() ? code.dailyUsedCount : 0}/${code.dailyMaxUses} 次（参考）` : ` · 今日 ${code.dailyUsedOn === chinaToday() ? code.dailyUsedCount : 0} 次`}</p></div>
             <div className="flex gap-2"><button onClick={() => editInvite(code)} className="rounded border px-3 py-1.5 text-xs">编辑</button>
               <button onClick={() => closeInvite(code.id)} className="rounded border px-3 py-1.5 text-xs">关闭</button>
               {!users.some(user => user.inviteCodeId === code.id) && <button onClick={() => removeInvite(code.id)}
@@ -294,8 +381,11 @@ export default function SettingsPage() {
           {editingInvite === code.id && <div className="mt-3 grid gap-2 rounded bg-gray-50 p-3 dark:bg-gray-900 sm:grid-cols-2">
             <label className="text-xs">备注<input value={inviteDraft.label} maxLength={120} onChange={event => setInviteDraft({ ...inviteDraft, label: event.target.value })}
               className="mt-1 w-full rounded border px-2 py-1.5 dark:bg-gray-800" /></label>
-            <label className="text-xs">最多使用次数<input type="number" min={code.usedCount || 1} max={100} value={inviteDraft.maxUses}
+            <label className="text-xs">总共最多次数<input type="number" min={code.usedCount || 1} max={1000} value={inviteDraft.maxUses}
               onChange={event => setInviteDraft({ ...inviteDraft, maxUses: Number(event.target.value) })}
+              className="mt-1 w-full rounded border px-2 py-1.5 dark:bg-gray-800" /></label>
+            <label className="text-xs">每日参考次数（不限制兑换）<input type="number" min="1" max="1000" placeholder="不设" value={inviteDraft.dailyMaxUses}
+              onChange={event => setInviteDraft({ ...inviteDraft, dailyMaxUses: event.target.value === '' ? '' : Number(event.target.value) })}
               className="mt-1 w-full rounded border px-2 py-1.5 dark:bg-gray-800" /></label>
             <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={inviteDraft.teamAccess}
               onChange={event => setInviteDraft({ ...inviteDraft, teamAccess: event.target.checked })} />新加入者可访问团队内容</label>
