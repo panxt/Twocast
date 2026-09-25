@@ -46,8 +46,13 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: Lis
   const [busy, setBusy] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
+  const [loadedQuery, setLoadedQuery] = useState('')
+  const [errorQuery, setErrorQuery] = useState('')
   const [revision, setRevision] = useState(0)
   const [directoryRevision, setDirectoryRevision] = useState(0)
+  const currentQuery = JSON.stringify([apiUrl, page, status, query, scope, folder])
+  const showingCurrent = loadedQuery === currentQuery && search === query
+  const currentError = errorQuery === currentQuery ? loadError : ''
 
   useEffect(() => {
     const timer = setTimeout(() => { setPage(1); setQuery(search) }, 300)
@@ -68,6 +73,7 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: Lis
     let alive = true
     setLoading(true)
     setLoadError('')
+    setErrorQuery('')
     const params = new URLSearchParams({ page: String(page), page_size: '15', status, search: query, scope, folder })
     const controller = new AbortController()
     fetch(`${apiUrl}?${params}`, { cache: 'no-store', signal: controller.signal }).then(async response => {
@@ -78,6 +84,7 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: Lis
       setItems(body.data.items)
       setPages(Math.max(1, body.data.pagination.totalPages))
       setTotal(body.data.pagination.total)
+      setLoadedQuery(currentQuery)
       if (body.data.viewer) {
         setIsAdmin(Boolean(body.data.viewer.isAdmin))
         setIsTeamMember(Boolean(body.data.viewer.isTeamMember))
@@ -86,10 +93,13 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: Lis
         setViewerLoaded(true)
       }
     }).catch(error => {
-      if (alive && error.name !== 'AbortError') setLoadError(error.message)
+      if (alive && error.name !== 'AbortError') {
+        setLoadError(error.message)
+        setErrorQuery(currentQuery)
+      }
     }).finally(() => { if (alive) setLoading(false) })
     return () => { alive = false; controller.abort() }
-  }, [apiUrl, page, status, query, scope, folder, refreshTrigger, revision])
+  }, [apiUrl, page, status, query, scope, folder, refreshTrigger, revision, currentQuery])
   useEffect(() => {
     if (!items.some(item => item.status === TaskStatus.Pending || item.status === TaskStatus.Processing)) return
     const timer = setTimeout(() => setRevision(value => value + 1), 5000)
@@ -152,7 +162,7 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: Lis
   return <section id="episode-library" className="scroll-mt-6 rounded-2xl border border-gray-200 bg-white/90 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900/80 sm:p-6">
     <div className="flex flex-wrap items-end justify-between gap-4">
       <div><h2 className="text-xl font-semibold text-gray-900 dark:text-white">音频与文件</h2>
-        <p className="mt-1 text-sm text-gray-500">共 {total} 条 · 私人内容仅自己和管理员可见，共享节目供团队查看{loading && items.length > 0 ? ' · 正在更新进度…' : ''}</p></div>
+        <p className="mt-1 text-sm text-gray-500">{showingCurrent ? `共 ${total} 条` : '正在查找节目'} · 私人内容仅自己和管理员可见，共享节目供团队查看{loading && showingCurrent ? ' · 正在更新进度…' : ''}</p></div>
       <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">查看范围
         <select aria-label="查看范围" value={scope || defaultScope} onChange={event => { setScope(event.target.value); setFolder(''); setPage(1) }}
           className="rounded-lg border px-3 py-2 dark:bg-gray-800">
@@ -179,10 +189,10 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: Lis
       </select>
     </div>
     <div className="mt-5 divide-y divide-gray-200 dark:divide-gray-700">
-      {loading && items.length === 0 && <p className="py-10 text-center text-sm text-gray-500">正在加载…</p>}
-      {!loading && loadError && <p role="alert" className="py-10 text-center text-sm text-red-600">{loadError}。<button className="underline" onClick={() => setRevision(value => value + 1)}>重试</button></p>}
-      {!loading && !loadError && items.length === 0 && <p className="py-10 text-center text-sm text-gray-500">没有匹配的记录</p>}
-      {items.map(task => <div key={task.uuid} className="py-4">
+      {!showingCurrent && !currentError && <p role="status" className="py-10 text-center text-sm text-gray-500">正在加载当前筛选结果…</p>}
+      {currentError && <p role="alert" className="py-6 text-center text-sm text-red-600">{currentError}。{showingCurrent ? '下方是上次加载的结果。' : ''}<button className="underline" onClick={() => setRevision(value => value + 1)}>重试</button></p>}
+      {showingCurrent && !loading && !currentError && items.length === 0 && <p className="py-10 text-center text-sm text-gray-500">没有匹配的记录</p>}
+      {showingCurrent && items.map(task => <div key={task.uuid} className="py-4">
         <div className="flex flex-wrap items-center gap-3">
           <button onClick={() => togglePlay(task)} disabled={!task.result?.audio_url}
             aria-label={(isPlaying || isLoading) && currentTrack?.id === task.uuid ? '暂停' : '播放'}
@@ -232,7 +242,7 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: Lis
         </div>}
       </div>)}
     </div>
-    {showPagination && <div className="mt-5 flex items-center justify-end gap-3 text-sm">
+    {showPagination && showingCurrent && <div className="mt-5 flex items-center justify-end gap-3 text-sm">
       <button onClick={() => setPage(value => Math.max(1, value - 1))} disabled={page <= 1} className="rounded border px-3 py-1 disabled:opacity-40">上一页</button>
       <span>{page} / {pages}</span>
       <button onClick={() => setPage(value => Math.min(pages, value + 1))} disabled={page >= pages} className="rounded border px-3 py-1 disabled:opacity-40">下一页</button>
