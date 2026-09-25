@@ -147,10 +147,10 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: Lis
     else play({ id: task.uuid, url: task.result.audio_url, title: titleOf(task), duration: task.result.duration })
   }
 
-  return <section className="rounded-2xl border border-gray-200 bg-white/90 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900/80 sm:p-6">
+  return <section id="episode-library" className="scroll-mt-6 rounded-2xl border border-gray-200 bg-white/90 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900/80 sm:p-6">
     <div className="flex flex-wrap items-end justify-between gap-4">
       <div><h2 className="text-xl font-semibold text-gray-900 dark:text-white">音频与文件</h2>
-        <p className="mt-1 text-sm text-gray-500">共 {total} 条 · 私人内容仅自己和管理员可见，共享节目供团队查看</p></div>
+        <p className="mt-1 text-sm text-gray-500">共 {total} 条 · 私人内容仅自己和管理员可见，共享节目供团队查看{loading && items.length > 0 ? ' · 正在更新进度…' : ''}</p></div>
       <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">查看范围
         <select aria-label="查看范围" value={scope || defaultScope} onChange={event => { setScope(event.target.value); setFolder(''); setPage(1) }}
           className="rounded-lg border px-3 py-2 dark:bg-gray-800">
@@ -177,7 +177,7 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true }: Lis
       </select>
     </div>
     <div className="mt-5 divide-y divide-gray-200 dark:divide-gray-700">
-      {loading && <p className="py-10 text-center text-sm text-gray-500">正在加载…</p>}
+      {loading && items.length === 0 && <p className="py-10 text-center text-sm text-gray-500">正在加载…</p>}
       {!loading && loadError && <p role="alert" className="py-10 text-center text-sm text-red-600">{loadError}。<button className="underline" onClick={() => setRevision(value => value + 1)}>重试</button></p>}
       {!loading && !loadError && items.length === 0 && <p className="py-10 text-center text-sm text-gray-500">没有匹配的记录</p>}
       {items.map(task => <div key={task.uuid} className="py-4">
