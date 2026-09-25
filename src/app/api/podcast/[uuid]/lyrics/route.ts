@@ -19,7 +19,7 @@ export async function GET(_: Request, context: { params: Promise<{ uuid: string 
   const audio = taskGetStepItem(task, PodcastStep.Audio)
   const timedScript = audio?.output?.timedScript
   if (!Array.isArray(timedScript)) return NextResponse.json({ error: '同步歌词尚未生成' }, { status: 404 })
-  const title = (audio.input as LongTextResult)?.title || '驿路通·声笺'
+  const title = (audio.input as LongTextResult)?.title || '驿·声笺'
   return new Response(toLrc(timedScript, title), {
     headers: {
       'content-type': 'text/plain; charset=utf-8',

@@ -32,7 +32,7 @@ export default function EnterCode() {
   }
 
   return <main className="mx-auto max-w-md px-6 py-24 text-center">
-    <p className="mb-3 text-sm font-semibold tracking-widest text-indigo-600">驿路通·声笺</p>
+    <p className="mb-3 text-sm font-semibold tracking-widest text-indigo-600">驿·声笺</p>
     <h1 className="text-3xl font-bold">进入团队播客工作台</h1>
     <p className="mt-4 text-gray-600">输入团队邀请码或个人登录码。</p>
     {loginCode && <section className="mt-8 rounded-xl border p-5 text-left">
