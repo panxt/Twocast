@@ -6,6 +6,7 @@ import { getSettings, getUserSettings, SettingKey, ApiToggleKey } from './settin
 import { ApiAccess, ApiSource } from './api-context'
 import { getShareChain } from './member-share-chain'
 import { Platform } from './podcast/types'
+import { CAPABILITY_LABELS, ShareCapability, TTS_CAPABILITIES } from './api-capabilities'
 
 type User = { userId: number; inviteCodeId: number | null; isAdmin: boolean }
 type Capability = 'llm' | 'tts'
@@ -32,28 +33,30 @@ export async function availableApiAccess(user: User, needsSearch: boolean, platf
   if (needsSearch) llmKeys.push('LLM_SEARCH_URL', 'LLM_SEARCH_MODEL', 'LLM_SEARCH_API_KEY')
   const ttsKeys = ttsSettingKeys[platform]
   const selection = await Promise.all([
-    selectCapability(user, 'llm', llmKeys), selectCapability(user, 'tts', ttsKeys),
+    selectCapability(user, 'llm', llmKeys), selectCapability(user, 'tts', ttsKeys, platform),
   ])
   return { llm: selection[0], tts: selection[1] }
 }
 
 export async function availableTtsAccess(user: User, platform: Platform = Platform.Minimax) {
-  return selectCapability(user, 'tts', ttsSettingKeys[platform])
+  return selectCapability(user, 'tts', ttsSettingKeys[platform], platform)
 }
 
 type Selection = { source: ApiSource; grantId?: number; memberShareId?: number; memberShareChainIds?: number[]; ownerUserId?: number; error?: string }
 
-async function selectCapability(user: User, capability: Capability, keys: SettingKey[]): Promise<Selection> {
+async function selectCapability(user: User, capability: Capability, keys: SettingKey[], platform: Platform = Platform.Minimax): Promise<Selection> {
+  const shareCapability: ShareCapability = capability === 'llm' ? 'llm' : TTS_CAPABILITIES[platform]
+  const label = CAPABILITY_LABELS[shareCapability]
   if (user.isAdmin) {
-    if (!(await enabled(user.userId, capability, false))) return { source: 'admin', error: `${capability === 'llm' ? '大模型' : '语音'} API 已停用，请在设置中启用` }
+    if (!(await enabled(user.userId, capability, false))) return { source: 'admin', error: `${label} API 已停用，请在设置中启用` }
     return await configured(user.userId, keys, false) ? { source: 'admin' }
-      : { source: 'admin', error: `${capability === 'llm' ? '大模型' : 'MiniMax TTS'} 尚未配置` }
+      : { source: 'admin', error: `${label} API 尚未配置` }
   }
   const ownEnabled = await enabled(user.userId, capability, true)
   const ownConfigured = await configured(user.userId, keys, true)
   if (ownEnabled && ownConfigured) return { source: 'own' }
   const shares = await getDb().select().from(memberApiSharesTable).where(and(
-    eq(memberApiSharesTable.recipientUserId, user.userId), eq(memberApiSharesTable.capability, capability),
+    eq(memberApiSharesTable.recipientUserId, user.userId), eq(memberApiSharesTable.capability, shareCapability),
     eq(memberApiSharesTable.active, true),
     sql`${memberApiSharesTable.usedEpisodes} < ${memberApiSharesTable.maxEpisodes}`,
   )).orderBy(memberApiSharesTable.id)
@@ -70,20 +73,20 @@ async function selectCapability(user: User, capability: Capability, keys: Settin
     }
   }
   const grants = await getDb().select().from(apiGrantsTable).where(and(
-    eq(apiGrantsTable.capability, capability),
+    eq(apiGrantsTable.capability, shareCapability),
     or(eq(apiGrantsTable.userId, user.userId), user.inviteCodeId ? eq(apiGrantsTable.inviteCodeId, user.inviteCodeId) : undefined),
   )).orderBy(sql`CASE WHEN ${apiGrantsTable.userId} IS NOT NULL THEN 0 ELSE 1 END`, apiGrantsTable.id)
   const grant = grants.find(item => item.usedEpisodes < item.maxEpisodes && (!item.expiresAt || item.expiresAt > new Date()))
   if (grant) {
-    if (!(await enabled(user.userId, capability, false))) return { source: 'grant', error: `管理员已停用共享${capability === 'llm' ? '大模型' : '语音'} API` }
+    if (!(await enabled(user.userId, capability, false))) return { source: 'grant', error: `管理员已停用共享${label} API` }
     if (!(await configured(user.userId, keys, false))) return { source: 'grant', error: '管理员共享 API 尚未配置完整' }
     return { source: 'grant', grantId: grant.id }
   }
   return { source: 'grant', error: !ownEnabled && ownConfigured && !grants.length
-    ? `自己的${capability === 'llm' ? '大模型' : '语音'} API 已停用，且未获管理员共享授权`
+    ? `自己的${label} API 已停用，且未获管理员共享授权`
     : grants.length
-    ? `${capability === 'llm' ? '大模型' : '语音'}共享额度已用完；请配置自己的 API 或联系管理员`
-    : `未获管理员共享${capability === 'llm' ? '大模型' : '语音'} API 授权；请配置自己的 API 或联系管理员` }
+    ? `${label}共享额度已用完；请配置自己的 API 或联系管理员`
+    : `未获管理员共享${label} API 授权；请配置自己的 API 或联系管理员` }
 }
 
 export async function reserveApiAccess(user: User, needsSearch: boolean, platform: Platform = Platform.Minimax): Promise<{

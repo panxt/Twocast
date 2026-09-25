@@ -5,10 +5,13 @@ import { memberApiSharesTable, sessionsTable } from '@/db/schema'
 import { getCurrentUser } from '@/utils/user'
 import { getUserSettings, SettingKey } from '@/lib/settings'
 import { getShareChain } from '@/lib/member-share-chain'
+import { isShareCapability, ShareCapability } from '@/lib/api-capabilities'
 
-const requiredKeys: Record<'llm' | 'tts', SettingKey[]> = {
+const requiredKeys: Record<ShareCapability, SettingKey[]> = {
   llm: ['LLM_CHAT_URL', 'LLM_CHAT_MODEL', 'LLM_API_KEY'],
-  tts: ['MINIMAX_TOKEN'],
+  'tts:minimaxi': ['MINIMAX_GROUP_ID', 'MINIMAX_TOKEN'],
+  'tts:fish_audio': ['FISH_AUDIO_TOKEN'],
+  'tts:gemini': ['GEMINI_TTS_API_KEY'],
 }
 
 export async function GET() {
@@ -28,11 +31,11 @@ export async function POST(request: NextRequest) {
   const user = await getCurrentUser()
   if (!user.userEmail || user.isAdmin) return NextResponse.json({ error: '只有受邀成员能分享私有 API' }, { status: 403 })
   const input = await request.json().catch(() => null)
-  const capability = input?.capability as 'llm' | 'tts'
+  const capability = input?.capability
   const recipientUserId = Number(input?.recipientUserId)
   const maxEpisodes = Number(input?.maxEpisodes)
   const parentShareId = input?.parentShareId == null ? null : Number(input.parentShareId)
-  if (!(capability in requiredKeys) || !Number.isInteger(recipientUserId) || recipientUserId < 1 ||
+  if (!isShareCapability(capability) || !Number.isInteger(recipientUserId) || recipientUserId < 1 ||
       recipientUserId === user.userId || !Number.isInteger(maxEpisodes) || maxEpisodes < 1 || maxEpisodes > 1000 ||
       (parentShareId !== null && (!Number.isInteger(parentShareId) || parentShareId < 1))) {
     return NextResponse.json({ error: '分享参数无效' }, { status: 400 })
@@ -57,10 +60,8 @@ export async function POST(request: NextRequest) {
       gt(sessionsTable.expiresAt, new Date()))).limit(1)
   if (!owner) return NextResponse.json({ error: '原 Key 持有人已失效' }, { status: 403 })
   const toggle = capability === 'llm' ? 'API_LLM_ENABLED' : 'API_TTS_ENABLED'
-  const keys = capability === 'tts' ? ['MINIMAX_TOKEN', 'FISH_AUDIO_TOKEN', 'GEMINI_TTS_API_KEY'] as SettingKey[] : requiredKeys.llm
-  const values = await getUserSettings(ownerUserId, [...keys, toggle])
-  if (values[toggle] === '0' || (capability === 'tts'
-    ? !keys.some(key => Boolean(values[key])) : !requiredKeys.llm.every(key => Boolean(values[key])))) {
+  const values = await getUserSettings(ownerUserId, [...requiredKeys[capability], toggle])
+  if (values[toggle] === '0' || !requiredKeys[capability].every(key => Boolean(values[key]))) {
     return NextResponse.json({ error: '原持有人尚未配置并启用对应 API' }, { status: 400 })
   }
   const [share] = await db.insert(memberApiSharesTable).values({

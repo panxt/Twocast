@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { CAPABILITY_LABELS, ShareCapability, TTS_CAPABILITIES } from '@/lib/api-capabilities'
+import { Platform } from '@/lib/podcast/types'
 
 const fields = [
   ['LLM_CHAT_URL', '聊天接口 URL'], ['LLM_CHAT_MODEL', '聊天模型'], ['LLM_API_KEY', '聊天 API Key'],
@@ -12,7 +14,7 @@ const fields = [
 const secrets = new Set(['LLM_API_KEY', 'LLM_SEARCH_API_KEY', 'MINIMAX_TOKEN', 'FISH_AUDIO_TOKEN', 'GEMINI_TTS_API_KEY'])
 type Grant = { id: number; userId: number | null; inviteCodeId: number | null; capability: string; maxEpisodes: number; usedEpisodes: number }
 type User = { id: number; displayName: string | null; inviteCodeId: number | null; teamAccess: boolean; expiresAt: string }
-type ApiShare = { id: number; ownerUserId: number; recipientUserId: number; capability: 'llm' | 'tts';
+type ApiShare = { id: number; ownerUserId: number; recipientUserId: number; capability: ShareCapability;
   delegatedByUserId: number | null; parentShareId: number | null; allowReshare: boolean;
   maxEpisodes: number; usedEpisodes: number; active: boolean }
 type Code = { id: number; label: string | null; usedCount: number; maxUses: number;
@@ -21,6 +23,8 @@ type Code = { id: number; label: string | null; usedCount: number; maxUses: numb
 const chinaToday = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
 const inviteState = (code: Code) => code.expiresAt && new Date(code.expiresAt).getTime() <= Date.now()
   ? '已关闭' : code.usedCount >= code.maxUses ? '已用完' : `剩余 ${code.maxUses - code.usedCount} 次`
+const accessText = (access?: { source: string; error?: string }) => !access ? '正在检查…' : access.error ||
+  (access.source === 'own' ? '使用自己的 API' : access.source === 'member' ? '使用成员分享额度' : '使用管理员授权额度')
 
 export default function SettingsPage() {
   const [admin, setAdmin] = useState(false)
@@ -30,6 +34,7 @@ export default function SettingsPage() {
   const [apiEnabled, setApiEnabled] = useState<Record<'llm' | 'tts', boolean>>({ llm: true, tts: true })
   const [savingToggle, setSavingToggle] = useState<'llm' | 'tts' | null>(null)
   const [access, setAccess] = useState<any>(null)
+  const [ttsAccess, setTtsAccess] = useState<Record<string, { source: string; error?: string }> | null>(null)
   const [message, setMessage] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [inviteCode, setInviteCode] = useState('')
@@ -47,7 +52,7 @@ export default function SettingsPage() {
   const [currentUserId, setCurrentUserId] = useState(0)
   const [shareRecipient, setShareRecipient] = useState('')
   const [shareSource, setShareSource] = useState('')
-  const [shareCapability, setShareCapability] = useState<'llm' | 'tts'>('llm')
+  const [shareCapability, setShareCapability] = useState<ShareCapability>('llm')
   const [shareEpisodes, setShareEpisodes] = useState(3)
   const [shareLimits, setShareLimits] = useState<Record<number, number>>({})
   const [shareError, setShareError] = useState('')
@@ -56,7 +61,7 @@ export default function SettingsPage() {
   const [teamLoading, setTeamLoading] = useState(false)
   const [teamError, setTeamError] = useState('')
   const [target, setTarget] = useState('')
-  const [capability, setCapability] = useState('llm')
+  const [capability, setCapability] = useState<ShareCapability>('llm')
   const [episodes, setEpisodes] = useState(3)
 
   async function loadTeam() {
@@ -91,7 +96,7 @@ export default function SettingsPage() {
     setAdmin(Boolean(me.isAdmin))
     setCurrentUserId(me.userId || 0)
     setDisplayName(me.displayName || '')
-    const response = await fetch(me.isAdmin ? '/api/admin/settings' : '/api/user/settings')
+    const response = await fetch(me.isAdmin ? '/api/admin/settings' : '/api/user/settings?allTts=1')
     if (!response.ok) { setMessage('请先登录'); setReady(true); return }
     const data = await response.json()
     const next: Record<string, string> = {}
@@ -104,6 +109,7 @@ export default function SettingsPage() {
     setConfigured(flags)
     setApiEnabled({ llm: data.settings.API_LLM_ENABLED !== '0', tts: data.settings.API_TTS_ENABLED !== '0' })
     setAccess(data.access || null)
+    setTtsAccess(data.ttsAccess || null)
     setReady(true)
     if (me.isAdmin && refreshTeam) void loadTeam()
     if (refreshTeam) void loadShares()
@@ -269,13 +275,13 @@ export default function SettingsPage() {
   return <main className="mx-auto max-w-5xl space-y-8 p-6 sm:p-8">
     <header><h1 className="text-3xl font-semibold">模型与权限设置</h1>
       <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-        {admin ? '全局密钥仅供管理员及明确授权的成员使用。' : '你的密钥只保存在服务端，仅你的生成任务会使用。私有配置优先于管理员授权。'}
+        {admin ? '全局密钥仅供管理员及明确授权的成员使用。' : '你的密钥只保存在服务端，默认仅自己的任务使用；主动分享后，指定成员才能在额度内调用。私有配置优先于共享授权。'}
       </p></header>
     {!admin && access && <section className="rounded-xl border p-4 text-sm">
       <h2 className="font-semibold">当前可用权限</h2>
-      {(['llm', 'tts'] as const).map(key => <p key={key} className="mt-2">
-        {key === 'llm' ? '大模型' : '语音'}：{access[key]?.error || (access[key]?.source === 'own' ? '使用自己的 API'
-          : access[key]?.source === 'member' ? '使用成员分享额度' : '使用管理员授权额度')}
+      <p className="mt-2">大模型：{accessText(access.llm)}</p>
+      {Object.values(Platform).map(platform => <p key={platform} className="mt-2">
+        {CAPABILITY_LABELS[TTS_CAPABILITIES[platform]]}：{accessText(ttsAccess?.[platform])}
       </p>)}
       <p className="mt-2 text-gray-500">按主题生成需要额外配置搜索模型；管理员授权按完整节目计数。</p>
     </section>}
@@ -323,8 +329,9 @@ export default function SettingsPage() {
           <option value="">选择接收成员</option>
           {shareUsers.filter(item => item.id !== currentUserId).map(item => <option key={item.id} value={item.id}>{item.displayName || `用户 #${item.id}`}</option>)}
         </select>
-        <select aria-label="分享能力" value={shareCapability} onChange={event => { setShareCapability(event.target.value as 'llm' | 'tts'); setShareSource('') }}
-          className="rounded border px-2 py-2 dark:bg-gray-800"><option value="llm">大模型</option><option value="tts">语音（已配置的平台）</option></select>
+        <select aria-label="分享能力" value={shareCapability} onChange={event => { setShareCapability(event.target.value as ShareCapability); setShareSource('') }}
+          className="rounded border px-2 py-2 dark:bg-gray-800">{Object.entries(CAPABILITY_LABELS).map(([key, label]) =>
+            <option key={key} value={key}>{label}</option>)}</select>
         <label className="text-sm">总期数<input type="number" min="1" max="1000" value={shareEpisodes}
           onChange={event => setShareEpisodes(Number(event.target.value))} className="ml-2 w-20 rounded border px-2 py-2 dark:bg-gray-800" /></label>
         <button onClick={createShare} disabled={!shareRecipient} className="rounded bg-indigo-600 px-4 py-2 text-sm text-white disabled:opacity-50">分享额度</button>
@@ -332,7 +339,7 @@ export default function SettingsPage() {
       <div className="divide-y text-sm dark:divide-gray-700">{shares.length === 0 && !shareError && <p className="py-2 text-gray-500">暂无成员 API 分享</p>}
         {shares.map(share => <div key={share.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
           <span>{shareUsers.find(item => item.id === share.delegatedByUserId)?.displayName || `用户 #${share.delegatedByUserId || share.ownerUserId}`} → {shareUsers.find(item => item.id === share.recipientUserId)?.displayName || `用户 #${share.recipientUserId}`}
-            {' · '}{share.capability === 'llm' ? '大模型' : '语音'} · 已用 {share.usedEpisodes}/{share.maxEpisodes} 期 · {share.active ? '启用' : '暂停'}
+            {' · '}{CAPABILITY_LABELS[share.capability] || share.capability} · 已用 {share.usedEpisodes}/{share.maxEpisodes} 期 · {share.active ? '启用' : '暂停'}
             {share.parentShareId && ` · 来自分享 #${share.parentShareId}`}{share.allowReshare && ' · 可转分享'}</span>
           {(admin || share.ownerUserId === currentUserId || share.delegatedByUserId === currentUserId) && <div className="flex items-center gap-2">
             <input aria-label={`分享 #${share.id} 总期数`} type="number" min={share.usedEpisodes || 1} max="1000"
@@ -438,15 +445,15 @@ export default function SettingsPage() {
       </div>
       <section className="space-y-3 rounded-xl border p-5">
         <h2 className="text-lg font-semibold">共享 API 授权</h2>
-        <p className="text-sm text-gray-500">可指定邀请码或已加入的用户；大模型与语音分别授权，额度按节目计算。</p>
+        <p className="text-sm text-gray-500">可指定邀请码或已加入的用户；每个语音平台单独授权，额度按节目计算。</p>
         <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_8rem_6rem_6rem]">
           <select aria-label="授权对象" value={target} onChange={event => setTarget(event.target.value)} className="min-w-0 rounded border px-2 py-2 dark:bg-gray-800">
             <option value="">选择用户或邀请码</option>
             {users.map(user => <option key={user.id} value={`user:${user.id}`}>用户 #{user.id} {user.displayName || ''}</option>)}
             {codes.map(code => <option key={code.id} value={`code:${code.id}`}>邀请码 #{code.id} {code.label || ''} · {code.teamAccess ? '团队' : '体验'} · {inviteState(code)}</option>)}
           </select>
-          <select aria-label="能力" value={capability} onChange={event => setCapability(event.target.value)} className="rounded border px-2 py-2 dark:bg-gray-800">
-            <option value="llm">大模型</option><option value="tts">语音</option></select>
+          <select aria-label="能力" value={capability} onChange={event => setCapability(event.target.value as ShareCapability)} className="rounded border px-2 py-2 dark:bg-gray-800">
+            {Object.entries(CAPABILITY_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>
           <input aria-label="节目额度" type="number" min="1" max="1000" value={episodes}
             onChange={event => setEpisodes(Number(event.target.value))} className="rounded border px-2 py-2 dark:bg-gray-800" />
           <button onClick={grant} disabled={!target || teamLoading} className="whitespace-nowrap rounded bg-indigo-600 px-4 py-2 text-white disabled:opacity-40">授权</button>
@@ -455,7 +462,7 @@ export default function SettingsPage() {
           {teamLoading && grants.length === 0 && <p className="py-3 text-gray-500">正在加载授权…</p>}
           {!teamLoading && !teamError && grants.length === 0 && <p className="py-3 text-gray-500">尚未分配共享 API 额度</p>}
           {grants.map(item => <div key={item.id} className="flex items-center justify-between gap-2 py-2">
-          <span>{item.userId ? `用户 #${item.userId}` : `邀请码 #${item.inviteCodeId}`} · {item.capability === 'llm' ? '大模型' : '语音'} · {item.usedEpisodes}/{item.maxEpisodes} 期</span>
+          <span>{item.userId ? `用户 #${item.userId}` : `邀请码 #${item.inviteCodeId}`} · {CAPABILITY_LABELS[item.capability as ShareCapability] || item.capability} · {item.usedEpisodes}/{item.maxEpisodes} 期</span>
           <button onClick={() => revoke(item.id)} className="text-red-600">撤销</button>
         </div>)}</div>
       </section>

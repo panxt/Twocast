@@ -4,7 +4,7 @@ import { getDb } from '@/db/db'
 import { userApiSettingsTable } from '@/db/schema'
 import { getCurrentUser } from '@/utils/user'
 import { getUserSettings, setUserSetting, SETTING_KEYS, SettingKey } from '@/lib/settings'
-import { availableApiAccess } from '@/lib/api-access'
+import { availableApiAccess, availableTtsAccess } from '@/lib/api-access'
 import { Platform } from '@/lib/podcast/types'
 
 const SECRETS = new Set(['LLM_API_KEY', 'LLM_SEARCH_API_KEY', 'MINIMAX_TOKEN', 'FISH_AUDIO_TOKEN', 'GEMINI_TTS_API_KEY'])
@@ -24,7 +24,13 @@ export async function GET(request: NextRequest) {
   const platform = Object.values(Platform).includes(requestedPlatform as Platform)
     ? requestedPlatform as Platform : Platform.Minimax
   const access = await availableApiAccess(user, false, platform)
-  return NextResponse.json({ settings, access })
+  let ttsAccess: Record<string, Awaited<ReturnType<typeof availableTtsAccess>>> | undefined
+  if (request.nextUrl.searchParams.get('allTts') === '1') {
+    const others = Object.values(Platform).filter(item => item !== platform)
+    const results = await Promise.all(others.map(item => availableTtsAccess(user, item)))
+    ttsAccess = { [platform]: access.tts, ...Object.fromEntries(others.map((item, index) => [item, results[index]])) }
+  }
+  return NextResponse.json({ settings, access, ttsAccess })
 }
 
 export async function PUT(request: NextRequest) {

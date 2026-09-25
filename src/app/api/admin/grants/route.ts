@@ -3,6 +3,7 @@ import { desc, eq } from 'drizzle-orm'
 import { getDb } from '@/db/db'
 import { apiGrantsTable, inviteCodesTable, sessionsTable } from '@/db/schema'
 import { getCurrentUser } from '@/utils/user'
+import { isShareCapability } from '@/lib/api-capabilities'
 
 export async function GET() {
   if (!(await getCurrentUser()).isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
@@ -35,7 +36,7 @@ export async function POST(request: NextRequest) {
   const maxEpisodes = Number(body?.maxEpisodes)
   const userId = body?.userId == null ? null : Number(body.userId)
   const inviteCodeId = body?.inviteCodeId == null ? null : Number(body.inviteCodeId)
-  if (!['llm', 'tts'].includes(capability) || !Number.isInteger(maxEpisodes) || maxEpisodes < 1 || maxEpisodes > 1000 ||
+  if (!isShareCapability(capability) || !Number.isInteger(maxEpisodes) || maxEpisodes < 1 || maxEpisodes > 1000 ||
       (userId === null) === (inviteCodeId === null) ||
       (userId !== null && (!Number.isInteger(userId) || userId < 1)) ||
       (inviteCodeId !== null && (!Number.isInteger(inviteCodeId) || inviteCodeId < 1))) {

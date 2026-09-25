@@ -19,7 +19,7 @@ jest.mock('drizzle-orm', () => ({ eq: (_: unknown, id: number) => {
 
 const share = (id: number, overrides: Record<string, unknown> = {}) => ({
   id, ownerUserId: 1, recipientUserId: id + 1, delegatedByUserId: id === 1 ? 1 : id,
-  parentShareId: id === 1 ? null : id - 1, capability: 'tts',
+  parentShareId: id === 1 ? null : id - 1, capability: 'tts:minimaxi',
   active: true, allowReshare: true, usedEpisodes: 0, maxEpisodes: 3, ...overrides,
 })
 
@@ -46,6 +46,11 @@ describe('revocable member API delegation', () => {
     expect(await getShareChain(2)).toBeNull()
     rows.set(1, share(1))
     rows.set(2, share(2, { delegatedByUserId: 99 }))
+    expect(await getShareChain(2)).toBeNull()
+  })
+
+  it('never lets a MiniMax allowance become a Fish Audio allowance downstream', async () => {
+    rows.set(2, share(2, { capability: 'tts:fish_audio' }))
     expect(await getShareChain(2)).toBeNull()
   })
 })

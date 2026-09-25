@@ -5,6 +5,8 @@ import { getDb } from '@/db/db'
 import { appSettingsTable, sessionsTable, userApiSettingsTable } from '@/db/schema'
 import { currentApiContext } from './api-context'
 import { getShareChain } from './member-share-chain'
+import { TTS_CAPABILITIES } from './api-capabilities'
+import { Platform } from './podcast/types'
 
 export const SETTING_KEYS = [
   'LLM_CHAT_URL', 'LLM_CHAT_MODEL', 'LLM_API_KEY',
@@ -78,6 +80,10 @@ export async function setUserSetting(userId: number, key: SettingKey, value: str
 export async function getApiSetting(key: SettingKey): Promise<string> {
   const context = currentApiContext()
   const capability = key.startsWith('MINIMAX_') || key.startsWith('FISH_AUDIO_') || key.startsWith('GEMINI_TTS_') ? 'tts' : 'llm'
+  const shareCapability = capability === 'llm' ? 'llm'
+    : key.startsWith('MINIMAX_') ? TTS_CAPABILITIES[Platform.Minimax]
+    : key.startsWith('FISH_AUDIO_') ? TTS_CAPABILITIES[Platform.FishAudio]
+    : TTS_CAPABILITIES[Platform.Gemini]
   if (context?.access[capability] === 'own') return getUserSetting(context.userId, key)
   if (context?.access[capability] === 'member') {
     const ownerId = context.keyOwners?.[capability]
@@ -90,7 +96,7 @@ export async function getApiSetting(key: SettingKey): Promise<string> {
       gt(sessionsTable.expiresAt, new Date()))).limit(1)
     const toggle = capability === 'llm' ? 'API_LLM_ENABLED' : 'API_TTS_ENABLED'
     if (!share || share.ownerUserId !== ownerId || share.recipientUserId !== context.userId ||
-      share.capability !== capability || !owner || await getUserSetting(ownerId, toggle) === '0') {
+      share.capability !== shareCapability || !owner || await getUserSetting(ownerId, toggle) === '0') {
       throw new Error('成员 API 分享已停用')
     }
     return getUserSetting(ownerId, key)
