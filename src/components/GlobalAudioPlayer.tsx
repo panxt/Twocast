@@ -1,12 +1,17 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import type { LocaleTypes } from '@/i18n/settings';
+import { getLocalePath } from '@/utils/locale-util';
 import { ChevronDown, ChevronUp, LoaderCircle, Pause, Play, RotateCcw, RotateCw, Volume2, VolumeX, X } from 'lucide-react';
 import { useAudioPlayer } from '@/contexts/AudioPlayerContext';
 import { formatTime } from '@/utils/time';
 
 // 底部播放条：页面里唯一带阴影的东西——它浮在纸面之上。
 export default function GlobalAudioPlayer() {
+  const locale = (useParams()?.locale || 'zh') as LocaleTypes;
   const {
     currentTrack,
     isPlaying,
@@ -27,6 +32,7 @@ export default function GlobalAudioPlayer() {
   } = useAudioPlayer();
 
   const [isExpanded, setIsExpanded] = useState(false);
+  const detailHref = currentTrack ? getLocalePath(locale, `/podcast/${currentTrack.id}`) : '';
 
   // 播放速度选项数组
   const playbackRates = [0.7, 0.8, 0.9, 1, 1.25, 1.5, 2];
@@ -74,7 +80,7 @@ export default function GlobalAudioPlayer() {
   return (
     <>
       {/* 底部固定播放器 */}
-      <div role="region" aria-label="正在播放" className="fixed bottom-0 left-0 right-0 z-50 border-t border-rule bg-sheet/95 shadow-bar backdrop-blur lg:left-[236px]">
+      <div role="region" aria-label="正在播放" className="fixed bottom-0 left-0 right-0 z-50 border-t border-rule bg-sheet/95 shadow-bar backdrop-blur lg:left-[var(--ys-sidebar-w,0px)]">
         {/* 进度条：顶边一根细线 */}
         <div className="absolute left-0 top-0 h-0.5 w-full bg-rule" aria-hidden="true">
           <div className="h-full bg-voice transition-[width] duration-200" style={{ width: `${percent}%` }} />
@@ -83,20 +89,20 @@ export default function GlobalAudioPlayer() {
         {/* 紧凑模式 */}
         {!isExpanded && <div className="mx-auto grid h-16 max-w-7xl grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 sm:h-[4.5rem] sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:gap-6 sm:px-6 lg:px-10">
           {/* 左侧：播放信息 */}
-          <div className="flex min-w-0 items-center gap-3">
+          <Link href={detailHref} title="打开节目详情" className="flex min-w-0 items-center gap-3 rounded-control text-ink hover:text-brand">
             {currentTrack.thumbnail
               ? <img src={currentTrack.thumbnail} alt="" className="h-10 w-10 shrink-0 rounded-control object-cover" />
               : <span aria-hidden="true" className="hidden h-10 w-10 shrink-0 place-items-center rounded-control bg-voice-tint text-voice sm:grid">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 12h2l2-6 3 12 3-9 2 6 2-3h4" /></svg>
                 </span>}
             <div className="min-w-0 leading-tight">
-              <p className="truncate text-sm font-semibold text-ink">{currentTrack.title}</p>
+              <p className="truncate text-sm font-semibold">{currentTrack.title}</p>
               <p className="text-xs tabular-nums text-ink-soft">
                 <span className="sm:hidden">{formatTime(currentTime)} / {formatTime(duration)}</span>
                 <span className="hidden sm:inline">{isLoading ? '正在加载' : isPlaying ? '正在播放' : '已暂停'}{currentTrack.artist ? ` · ${currentTrack.artist}` : ''}</span>
               </p>
             </div>
-          </div>
+          </Link>
 
           {/* 中间：播放控制 */}
           <div className="flex items-center gap-1 sm:gap-2">
@@ -140,7 +146,7 @@ export default function GlobalAudioPlayer() {
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-xs text-ink-soft">{isLoading ? '正在加载' : isPlaying ? '正在播放' : '已暂停'}</p>
-              <h3 className="truncate text-base font-semibold text-ink">{currentTrack.title}</h3>
+              <h3 className="truncate text-base font-semibold text-ink"><Link href={detailHref} className="hover:text-brand">{currentTrack.title}</Link></h3>
             </div>
             <div className="flex shrink-0 items-center gap-1">
               <button type="button" onClick={() => setIsExpanded(false)} aria-label="收起播放器" className="ys-icon-btn h-9 w-9">
