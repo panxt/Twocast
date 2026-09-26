@@ -27,11 +27,11 @@ export function useCoverActions(uuid: string, onChanged: (coverUrl: string | nul
     finally { setBusy(null); if (fileRef.current) fileRef.current.value = '' }
   }
 
-  async function generate(hint: string) {
+  async function generate(hint: string, provider: 'minimax' | 'gemini') {
     setBusy('generate')
     try {
       const response = await fetch(`/api/protected/tasks/${uuid}/cover/generate`, {
-        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ hint }),
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ hint, provider }),
       })
       const body = await response.json()
       if (!response.ok) throw new Error(body.error || '生成失败')
@@ -61,8 +61,11 @@ export function useCoverActions(uuid: string, onChanged: (coverUrl: string | nul
   return { busy, fileInput, promptDialog, pickFile: () => fileRef.current?.click(), openGenerate: () => setPromptOpen(true), remove }
 }
 
-function CoverPromptDialog({ open, busy, onClose, onSubmit }: { open: boolean; busy: boolean; onClose: () => void; onSubmit: (hint: string) => void }) {
+function CoverPromptDialog({ open, busy, onClose, onSubmit }: {
+  open: boolean; busy: boolean; onClose: () => void; onSubmit: (hint: string, provider: 'minimax' | 'gemini') => void
+}) {
   const [hint, setHint] = useState('')
+  const [provider, setProvider] = useState<'minimax' | 'gemini'>('minimax')
   return <Transition show={open} as={Fragment}>
     <Dialog onClose={() => { if (!busy) onClose() }} className="relative z-50">
       <Transition.Child as={Fragment} enter="ease-out duration-150" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-100" leaveFrom="opacity-100" leaveTo="opacity-0">
@@ -74,10 +77,18 @@ function CoverPromptDialog({ open, busy, onClose, onSubmit }: { open: boolean; b
             <div className="flex items-start justify-between gap-3">
               <div>
                 <Dialog.Title className="ys-title text-xl">AI 生成封面</Dialog.Title>
-                <p className="mt-1 text-sm text-ink-soft">会根据节目标题和大纲作画，生成一张无文字的方形插画。可以补一句想要的画面。</p>
+                <p className="mt-1 text-sm text-ink-soft">根据节目标题和大纲生成无文字的方形插画。默认沿用 MiniMax API，也可选择 Gemini。</p>
               </div>
               <button type="button" onClick={onClose} disabled={busy} aria-label="关闭" className="ys-icon-btn h-9 w-9"><X className="h-4 w-4" aria-hidden="true" /></button>
             </div>
+            <label className="mt-4 flex flex-col gap-2">
+              <span className="text-sm font-semibold">图片服务</span>
+              <select value={provider} onChange={event => setProvider(event.target.value as 'minimax' | 'gemini')} className="ys-field">
+                <option value="minimax">MiniMax（沿用语音 API Key）</option>
+                <option value="gemini">Gemini（使用 Gemini API Key）</option>
+              </select>
+              <span className="text-xs text-ink-soft">图片生成需要所选服务的图片 API 权益，可能单独计费。</span>
+            </label>
             <label className="mt-4 flex flex-col gap-2">
               <span className="text-sm font-semibold">画面提示（可选）</span>
               <textarea value={hint} onChange={event => setHint(event.target.value)} rows={3} maxLength={200}
@@ -85,7 +96,7 @@ function CoverPromptDialog({ open, busy, onClose, onSubmit }: { open: boolean; b
             </label>
             <div className="mt-5 flex justify-end gap-2">
               <button type="button" onClick={onClose} disabled={busy} className="ys-btn ys-btn-secondary">取消</button>
-              <button type="button" onClick={() => onSubmit(hint.trim())} disabled={busy} className="ys-btn ys-btn-primary">
+              <button type="button" onClick={() => onSubmit(hint.trim(), provider)} disabled={busy} className="ys-btn ys-btn-primary">
                 {busy ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Sparkles className="h-4 w-4" aria-hidden="true" />}
                 {busy ? '正在作画，约 10 秒' : '生成封面'}
               </button>

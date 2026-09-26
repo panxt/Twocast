@@ -8,10 +8,10 @@ import { Platform } from '@/lib/podcast/types'
 const fields = [
   ['LLM_CHAT_URL', '聊天接口 URL'], ['LLM_CHAT_MODEL', '聊天模型'], ['LLM_API_KEY', '聊天 API Key'],
   ['LLM_SEARCH_URL', '搜索接口 URL'], ['LLM_SEARCH_MODEL', '搜索模型'], ['LLM_SEARCH_API_KEY', '搜索 API Key'],
-  ['MINIMAX_GROUP_ID', 'MiniMax Group ID'], ['MINIMAX_TOKEN', 'MiniMax TTS API Key'],
+  ['MINIMAX_GROUP_ID', 'MiniMax Group ID'], ['MINIMAX_TOKEN', 'MiniMax API Key（语音与封面共用）'],
   ['FISH_AUDIO_TOKEN', 'Fish Audio API Key'], ['FISH_AUDIO_MODEL', 'Fish Audio 模型（默认 s2.1-pro-free）'],
   ['GEMINI_TTS_API_KEY', 'Gemini TTS API Key'], ['GEMINI_TTS_MODEL', 'Gemini TTS 模型（默认 gemini-3.8-flash-lite-tts）'],
-  ['GEMINI_IMAGE_MODEL', 'Gemini 封面图片模型（默认 gemini-2.5-flash-image，与 TTS 共用 Key）'],
+  ['GEMINI_IMAGE_MODEL', 'Gemini 封面图片模型（可选；默认 gemini-2.5-flash-image）'],
 ] as const
 const secrets = new Set(['LLM_API_KEY', 'LLM_SEARCH_API_KEY', 'MINIMAX_TOKEN', 'FISH_AUDIO_TOKEN', 'GEMINI_TTS_API_KEY'])
 type Grant = { id: number; userId: number | null; inviteCodeId: number | null; capability: string; maxEpisodes: number; usedEpisodes: number }
