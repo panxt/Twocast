@@ -35,10 +35,20 @@ export async function GET(_: Request, context: { params: Promise<{ uuid: string 
     { name: `${basename}.mp3`, data: mp3 },
     { name: `${basename}.lrc`, data: Buffer.from(toLrc(audio.timedScript, title), 'utf8') },
   ])
-  return new Response(new Uint8Array(zip), {
+  // Vercel limits buffered Function responses to 4.5 MB. Stream the archive so
+  // ordinary multi-minute episodes can be downloaded without hitting that cap.
+  let offset = 0
+  const body = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (offset >= zip.length) { controller.close(); return }
+      const end = Math.min(offset + 64 * 1024, zip.length)
+      controller.enqueue(new Uint8Array(zip.subarray(offset, end)))
+      offset = end
+    },
+  })
+  return new Response(body, {
     headers: {
       'content-type': 'application/zip',
-      'content-length': String(zip.length),
       'content-disposition': `attachment; filename="podcast.zip"; filename*=UTF-8''${encodeURIComponent(basename + '.zip')}`,
       'cache-control': 'private, no-store',
     },
