@@ -18,6 +18,8 @@ import { getLocalePath } from '@/utils/locale-util';
 import type { LocaleTypes } from '@/i18n/settings';
 import { AlignLeft, CircleAlert, FileText, FileUp, Lightbulb, Link2, LoaderCircle, Mic, Newspaper, X } from 'lucide-react';
 
+const SPEAKERS_KEY = 'ys-speakers';
+
 enum SelectType {
   Select = 'select',
   Input = 'input',
@@ -51,6 +53,7 @@ export function UserInput({ onSubmitSuccess, folderPath, extraFields }: UserInpu
   const [platform, setPlatform] = useState(Platform.Minimax.toString());
   const [voiceId_1, setVoiceId_1] = useState('');
   const [voiceId_2, setVoiceId_2] = useState('');
+  const [speakers, setSpeakers] = useState<1 | 2>(2);
   const [outputLanguage, setOutputLanguage] = useState('auto');
   const [voices, setVoices] = useState<Record<string, { id: string; name: string; icon?: string; sample?: string }[]>>({});
   const [voiceOptions, setVoiceOptions] = useState<OptionItem[]>([]);
@@ -61,8 +64,17 @@ export function UserInput({ onSubmitSuccess, folderPath, extraFields }: UserInpu
   const [voiceReload, setVoiceReload] = useState(0);
   const [dragging, setDragging] = useState(false);
   const audioRefs = useRef<{ [key: string]: HTMLAudioElement | null }>({});
-  const readyToSubmit = Boolean(platform && voiceId_1 && voiceId_2 &&
+  const readyToSubmit = Boolean(platform && voiceId_1 && (speakers === 1 || voiceId_2) &&
     (activeTab === PodcastInputType.File ? file : topic.trim()));
+
+  // 记住上次选的人数；默认两人对谈
+  useEffect(() => {
+    try { if (localStorage.getItem(SPEAKERS_KEY) === '1') setSpeakers(1); } catch { /* 忽略 */ }
+  }, []);
+  const chooseSpeakers = (count: 1 | 2) => {
+    setSpeakers(count);
+    try { localStorage.setItem(SPEAKERS_KEY, String(count)); } catch { /* 忽略 */ }
+  };
 
   const tabs = [
     { id: PodcastInputType.Topic, label: t('tabs.topic') },
@@ -220,7 +232,8 @@ export function UserInput({ onSubmitSuccess, folderPath, extraFields }: UserInpu
       formData.append("type", activeTab);
       formData.append("platform", platform);
       formData.append("voice_id_1", voiceId_1);
-      formData.append("voice_id_2", voiceId_2);
+      formData.append("voice_id_2", speakers === 1 ? voiceId_1 : voiceId_2);
+      formData.append("speakers", String(speakers));
       formData.append("language", outputLanguage);
       if (folderPath && folderPath !== "/") formData.append("folder_path", folderPath);
       if (activeTab == PodcastInputType.File) {
@@ -356,7 +369,16 @@ export function UserInput({ onSubmitSuccess, folderPath, extraFields }: UserInpu
 
       {/* 配音 */}
       <div className="flex flex-col gap-3">
-        <span className="text-sm font-semibold text-ink">配音</span>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-sm font-semibold text-ink">配音</span>
+          <div role="radiogroup" aria-label="几个人说" className="ys-seg grid-cols-2">
+            <button type="button" role="radio" aria-checked={speakers === 2} onClick={() => chooseSpeakers(2)} disabled={loading}
+              className={`ys-seg-item min-h-8 px-3 text-xs ${speakers === 2 ? 'ys-seg-item-active' : ''}`}>两人对谈</button>
+            <button type="button" role="radio" aria-checked={speakers === 1} onClick={() => chooseSpeakers(1)} disabled={loading}
+              className={`ys-seg-item min-h-8 px-3 text-xs ${speakers === 1 ? 'ys-seg-item-active' : ''}`}>一人讲述</button>
+          </div>
+        </div>
+        <p className="-mt-1 text-xs text-ink-soft">{speakers === 2 ? '主持人提问引导，嘉宾深入回答。' : '一位讲述者把资料讲给你听，像熟悉这件事的朋友在聊。'}</p>
         <div className="grid gap-3 sm:grid-cols-2">
           <TcSelector value={platform} onChange={(v) => {
             setPlatform(v);
@@ -367,13 +389,13 @@ export function UserInput({ onSubmitSuccess, folderPath, extraFields }: UserInpu
             }
           }} options={platforms} title={t('platform')} />
           <TcSelector value={outputLanguage} onChange={setOutputLanguage} options={languages[platform as Platform]} title={t('output_language')} />
-          {selectType == SelectType.Select && <TcSelector value={voiceId_1} onChange={setVoiceId_1} options={voiceOptions} title={t('voice_1')} />}
-          {selectType == SelectType.Select && <TcSelector value={voiceId_2} onChange={setVoiceId_2} options={voiceOptions} title={t('voice_2')} />}
+          {selectType == SelectType.Select && <TcSelector value={voiceId_1} onChange={setVoiceId_1} options={voiceOptions} title={speakers === 1 ? '讲述者' : t('voice_1')} />}
+          {selectType == SelectType.Select && speakers === 2 && <TcSelector value={voiceId_2} onChange={setVoiceId_2} options={voiceOptions} title={t('voice_2')} />}
           {selectType == SelectType.Input && <label className="min-w-0">
-            <span className="ys-label mb-1.5">{t('voice_1')}</span>
+            <span className="ys-label mb-1.5">{speakers === 1 ? '讲述者' : t('voice_1')}</span>
             <input type="text" value={voiceId_1} onChange={(e) => setVoiceId_1(e.target.value)} placeholder="Fish Audio Voice ID" className="ys-field" />
           </label>}
-          {selectType == SelectType.Input && <label className="min-w-0">
+          {selectType == SelectType.Input && speakers === 2 && <label className="min-w-0">
             <span className="ys-label mb-1.5">{t('voice_2')}</span>
             <input type="text" value={voiceId_2} onChange={(e) => setVoiceId_2(e.target.value)} placeholder="Fish Audio Voice ID" className="ys-field" />
           </label>}

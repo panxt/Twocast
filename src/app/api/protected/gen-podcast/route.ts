@@ -46,7 +46,10 @@ export async function POST(req: Request) {
   let text = formData.get('text')
   const platform = formData.get('platform')
   const voice_id_1 = formData.get('voice_id_1')
-  const voice_id_2 = formData.get('voice_id_2')
+  const speakers = formData.get('speakers') === '1' ? 1 : 2
+  const voice_id_2_raw = formData.get('voice_id_2')
+  // 单人讲述只需要一个声音；为兼容旧读取方，voice_id_2 落库时等于 voice_id_1
+  const voice_id_2 = speakers === 1 ? formData.get('voice_id_1') : voice_id_2_raw
   const file = formData.get('file')
   const language = formData.get('language')
   const folderPath = formData.get('folder_path')
@@ -132,7 +135,8 @@ export async function POST(req: Request) {
       text: text as string,
       platform: platform,
       voice_id_1: voice_id_1,
-      voice_id_2: voice_id_2,
+      voice_id_2: voice_id_2 as string,
+      speakers,
       language: language as string,
       fileName,
       fileLocation,

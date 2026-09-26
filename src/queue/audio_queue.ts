@@ -1,4 +1,5 @@
 import { AudioResult, Platform, PodcastStep, TaskUserInput } from "@/lib/podcast/types";
+import { speakerCount } from '@/lib/podcast/voices'
 import { BaseJobData, LongTextResult } from "./types";
 
 import { getDb } from "@/db/db";
@@ -59,7 +60,7 @@ export async function processAudioTask(task: Task) {
     }
     switch (platform) {
       case Platform.Gemini:
-        audioResult = await genWhole(result.script, userInputs.voice_id_1!, userInputs.voice_id_2!)
+        audioResult = await genWhole(result.script, userInputs.voice_id_1!, userInputs.voice_id_2 || userInputs.voice_id_1!, speakerCount(userInputs) === 1)
         break
       case Platform.Minimax:
         audioResult = await genParts({

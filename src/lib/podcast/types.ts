@@ -27,6 +27,8 @@ export type TaskUserInput = {
   platform?: string
   voice_id_1?: string
   voice_id_2?: string
+  // 1 = 单人讲述（所有台词用 voice_id_1），2 = 两人对谈；缺省按 2
+  speakers?: 1 | 2
   language?: string
   fileName?: string
   fileLocation?: string

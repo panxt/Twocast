@@ -172,7 +172,8 @@ export async function genParts(params: GenPartsParams): Promise<AudioResult> {
             if (!text) {
                 return;
             }
-            const voiceOpt = idx % 2 === 0 ? params.voiceOption_1 : params.voiceOption_2;
+            // 按角色分配：嘉宾用声音 B，其余（主持人 / 单人讲述）用声音 A
+            const voiceOpt = item.role === 'guest' ? params.voiceOption_2 : params.voiceOption_1;
             // console.log(`[genParts] id=${idx}`)
             const audio = await params.genFn(text, voiceOpt);
             audios[idx] = audio;

@@ -1,4 +1,5 @@
 import { PodcastInputType, PodcastStep, ScriptItem, TaskUserInput } from "@/lib/podcast/types";
+import { speakerCount } from '@/lib/podcast/voices'
 import { BaseJobData, LongTextResult } from "./types";
 
 import { getDb } from "@/db/db";
@@ -171,7 +172,8 @@ export async function genOutline(text: string, userInputs: TaskUserInput): Promi
 }
 
 export async function genScript(text: string, userInputs: TaskUserInput): Promise<ScriptItem[]> {
-  let prompt = fs.readFileSync(path.join(process.cwd(), 'resources/prompts/gen_script.md'), 'utf-8')
+  const promptFile = speakerCount(userInputs) === 1 ? 'resources/prompts/gen_script_solo.md' : 'resources/prompts/gen_script.md'
+  let prompt = fs.readFileSync(path.join(process.cwd(), promptFile), 'utf-8')
   if (userInputs.language && userInputs.language != 'auto') {
     prompt = prompt.replace('输出语言为: 原资料语言', `输出语言为: ${userInputs.language}`)
   }

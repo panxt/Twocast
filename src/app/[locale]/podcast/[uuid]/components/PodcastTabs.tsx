@@ -7,6 +7,7 @@ import { useTranslation } from '@/i18n/client';
 import { useParams } from 'next/navigation';
 import type { LocaleTypes } from '@/i18n/settings';
 import { useAudioPlayer } from '@/contexts/AudioPlayerContext';
+import { isSoloScript } from '@/lib/podcast/voices';
 
 interface PodcastTabsProps {
   trackId: string;
@@ -25,6 +26,7 @@ export default function PodcastTabs({ outline, keyPoints, scripts, timedScript, 
   const { currentTime, seek, currentTrack } = useAudioPlayer();
   const isCurrentTrack = currentTrack?.id === trackId;
   const activeLine = isCurrentTrack ? (timedScript?.findLastIndex(line => line.startMs <= currentTime * 1000) ?? -1) : -1;
+  const solo = isSoloScript(scripts);
   const scriptListRef = useRef<HTMLOListElement>(null);
   const lineRefs = useRef<(HTMLLIElement | null)[]>([]);
 
@@ -81,7 +83,7 @@ export default function PodcastTabs({ outline, keyPoints, scripts, timedScript, 
                     {stamp(timed.startMs)}
                   </button>
                 : <span className="text-xs tabular-nums text-ink-faint">#{index + 1}</span>}
-              <span className={`text-xs font-semibold ${host ? 'text-brand' : 'text-voice'}`}>{host ? t('role_host') : t('role_guest')}</span>
+              <span className={`text-xs font-semibold ${host ? 'text-brand' : 'text-voice'}`}>{solo ? '讲述' : host ? t('role_host') : t('role_guest')}</span>
               <p className="col-span-2 m-0 text-base leading-7 text-ink sm:col-span-1">{script.text}</p>
             </li>
           )

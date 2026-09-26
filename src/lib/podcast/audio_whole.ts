@@ -26,11 +26,13 @@ async function saveWaveFile(
    });
 }
 
-export async function genWhole(items: ScriptItem[], voiceId_1: string, voiceId_2: string): Promise<AudioResult> {
+export async function genWhole(items: ScriptItem[], voiceId_1: string, voiceId_2: string, solo = false): Promise<AudioResult> {
    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
    const script = items.map(item => `${item.role}: ${item.text}`).join('\n');
 
-   const prompt = `TTS the following conversation between ${items[0].role} and ${items[1].role}, with natural tone:
+   const prompt = solo
+      ? `TTS the following narration by a single host, with natural conversational tone:\n         ${items.map(item => item.text).join('\n')}`
+      : `TTS the following conversation between host and guest, with natural tone:
          ${script}`;
 
    const response = await ai.models.generateContent({
@@ -38,17 +40,17 @@ export async function genWhole(items: ScriptItem[], voiceId_1: string, voiceId_2
       contents: [{ parts: [{ text: prompt }] }],
       config: {
          responseModalities: ['AUDIO'],
-         speechConfig: {
+         speechConfig: solo ? { voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceId_1 } } } : {
             multiSpeakerVoiceConfig: {
                speakerVoiceConfigs: [
                   {
-                     speaker: items[0].role,
+                     speaker: 'host',
                      voiceConfig: {
                         prebuiltVoiceConfig: { voiceName: voiceId_1 }
                      }
                   },
                   {
-                     speaker: items[1].role,
+                     speaker: 'guest',
                      voiceConfig: {
                         prebuiltVoiceConfig: { voiceName: voiceId_2 }
                      }

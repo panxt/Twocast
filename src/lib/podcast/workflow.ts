@@ -1,4 +1,5 @@
 import { and, eq, inArray, sql } from 'drizzle-orm'
+import { voiceForRole, voiceMapFor } from './voices'
 import { getDb } from '@/db/db'
 import { apiGrantsTable, memberApiSharesTable, tasksTable } from '@/db/schema'
 import { getTaskByUuid } from '@/models/task'
@@ -67,7 +68,7 @@ async function getAudioPlan(uuid: string) {
   const result = step.input as LongTextResult
   if (!result?.script?.length) throw new Error('No generated script')
   await updateProgress(task.id, 'audio', 0, result.script.length)
-  return { script: result.script, voiceIds: [inputs.voice_id_1!, inputs.voice_id_2!] }
+  return { script: result.script, voices: voiceMapFor(inputs) }
 }
 
 async function generateAudioSegment(uuid: string, index: number, total: number, line: ScriptItem, voiceId: string) {
@@ -145,7 +146,7 @@ export async function generatePodcastWorkflow(uuid: string) {
     segmentCount = plan.script.length
     const files: string[] = []
     for (let index = 0; index < plan.script.length; index++) {
-      files.push(await generateAudioSegment(uuid, index, plan.script.length, plan.script[index], plan.voiceIds[index % 2]))
+      files.push(await generateAudioSegment(uuid, index, plan.script.length, plan.script[index], voiceForRole(plan.script[index].role, plan.voices)))
     }
     await finalizeAudio(uuid, files, plan.script)
   } catch (error) {
