@@ -4,8 +4,18 @@ import "pliny/search/algolia.css";
 import siteMetadata from "@/data/siteMetadata";
 import { Metadata } from "next";
 import { dir } from "i18next";
+import { Noto_Serif_SC } from "next/font/google";
 import { locales, LocaleTypes } from "@/i18n/settings";
 import Body from "../../templates/humanizeai-pro/Body";
+
+// 标题字：思源宋体，只给品牌名、页面标题与节目名；正文走系统中文黑体（见 tailwind.config.js fontFamily.sans）。
+const display = Noto_Serif_SC({
+  weight: ["600", "700"],
+  subsets: ["latin"],
+  display: "swap",
+  preload: false,
+  variable: "--font-display",
+});
 
 export async function generateStaticParams() {
   return locales.map((locale) => ({ locale }));
@@ -68,16 +78,11 @@ export default async function RootLayout({
   const body = <Body locale={locale}>{children}</Body>
 
   const html = (
-    <html lang={locale} dir={dir(locale)} className="scroll-smooth" suppressHydrationWarning>
-    <meta name="msapplication-TileColor" content="#000000" />
-    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#fff" />
-    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#000" />
+    <html lang={locale} dir={dir(locale)} className={`scroll-smooth ${display.variable}`} suppressHydrationWarning>
     <head>
-      {/*<link rel="apple-touch-icon" sizes="76x76" href="/static/favicons/apple-touch-icon.png"/>*/}
-      {/*<link rel="icon" type="image/png" sizes="32x32" href="/static/favicons/favicon-32x32.png"/>*/}
-      {/*<link rel="icon" type="image/png" sizes="16x16" href="/static/favicons/favicon-16x16.png"/>*/}
-      {/*<link rel="manifest" href="/static/favicons/site.webmanifest"/>*/}
-      {/*<link rel="mask-icon" href="/static/favicons/safari-pinned-tab.svg" color="#5bbad5"/>*/}
+      <meta name="msapplication-TileColor" content="#1f5fd6" />
+      <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f2f5f4" />
+      <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0e171b" />
       <link rel="alternate" type="application/rss+xml" href="/feed.xml" />
       <link rel="icon" type="image/svg+xml" href={siteMetadata.favicon} />
       <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" integrity="sha384-4LISF5TTJX/fLmGSxO53rV4miRxdg84mZsxmO8Rx5jGtp/LbrixFETvWa5a6sESd" crossOrigin="anonymous" />

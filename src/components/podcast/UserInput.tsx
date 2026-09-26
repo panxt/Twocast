@@ -11,12 +11,12 @@ import { languages as fishAudioLng } from "@/lib/podcast/languages/fish_audio";
 import { CustomTextarea } from "./CustomTextarea";
 import { useTranslation } from "react-i18next";
 import { VoicePlayerButton } from "./VoicePlayerButton";
-import { FaCoins } from "react-icons/fa";
 import { getPlatformDefaultVoices } from "@/lib/podcast/client_utils";
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { getLocalePath } from '@/utils/locale-util';
 import type { LocaleTypes } from '@/i18n/settings';
+import { AlignLeft, CircleAlert, FileText, FileUp, Lightbulb, Link2, LoaderCircle, Mic, Newspaper, X } from 'lucide-react';
 
 enum SelectType {
   Select = 'select',
@@ -26,6 +26,14 @@ enum SelectType {
 interface UserInputProps {
   onSubmitSuccess?: () => void;
 }
+
+const tabIcons: Record<PodcastInputType, React.ComponentType<{ className?: string }>> = {
+  [PodcastInputType.Topic]: Lightbulb,
+  [PodcastInputType.Link]: Link2,
+  [PodcastInputType.File]: FileUp,
+  [PodcastInputType.LongText]: AlignLeft,
+  [PodcastInputType.FrontPage]: Newspaper,
+};
 
 export function UserInput({ onSubmitSuccess }: UserInputProps) {
   const { t, i18n } = useTranslation('podcast');
@@ -49,22 +57,23 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
   const [apiWarning, setApiWarning] = useState('');
   const [voiceLoadError, setVoiceLoadError] = useState('');
   const [voiceReload, setVoiceReload] = useState(0);
+  const [dragging, setDragging] = useState(false);
   const audioRefs = useRef<{ [key: string]: HTMLAudioElement | null }>({});
   const readyToSubmit = Boolean(platform && voiceId_1 && voiceId_2 &&
     (activeTab === PodcastInputType.File ? file : topic.trim()));
 
   const tabs = [
-    { id: PodcastInputType.Topic, label: t('tabs.topic'), icon: "🧠" },
-    { id: PodcastInputType.Link, label: t('tabs.link'), icon: "🔗" },
-    { id: PodcastInputType.File, label: t('tabs.upload_file'), icon: "📁" },
-    { id: PodcastInputType.LongText, label: t('tabs.long_text'), icon: "📄" },
-    ...(process.env.NEXT_PUBLIC_VERCEL_BETA === '1' ? [] : [{ id: PodcastInputType.FrontPage, label: t('tabs.front_page'), icon: "🌐" }]),
+    { id: PodcastInputType.Topic, label: t('tabs.topic') },
+    { id: PodcastInputType.Link, label: t('tabs.link') },
+    { id: PodcastInputType.File, label: t('tabs.upload_file') },
+    { id: PodcastInputType.LongText, label: t('tabs.long_text') },
+    ...(process.env.NEXT_PUBLIC_VERCEL_BETA === '1' ? [] : [{ id: PodcastInputType.FrontPage, label: t('tabs.front_page') }]),
   ];
 
   const platforms: OptionItem[] = [
-    { id: Platform.Minimax, label: 'Minimax', icon: '🤖' },
-    { id: Platform.Gemini, label: 'Gemini TTS', icon: '🤖' },
-    { id: Platform.FishAudio, label: 'Fish Audio', icon: '🐟' },
+    { id: Platform.Minimax, label: 'MiniMax', icon: '' },
+    { id: Platform.Gemini, label: 'Gemini TTS', icon: '' },
+    { id: Platform.FishAudio, label: 'Fish Audio', icon: '' },
   ]
   const lngOpt2OptionItem = (lngs: any[]) => {
     const audoOpt = [{
@@ -106,7 +115,7 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
           setVoiceLoadError('');
         }
       } catch {
-        if (active) setVoiceLoadError('音色列表暂时无法加载，请重试。');
+        if (active) setVoiceLoadError('音色列表暂时无法加载。');
       }
     }
     fetchVoices()
@@ -121,8 +130,6 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
 
   useEffect(() => {
     if (platform) {
-      // setVoiceId_1('');
-      // setVoiceId_2('');
       if (platform === Platform.FishAudio) {
         setSelectType(SelectType.Input);
       } else {
@@ -186,6 +193,21 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
     setFile(null);
   };
 
+  const acceptFile = (candidate: File | undefined) => {
+    if (!candidate) return;
+    if (candidate.size > 4_000_000) {
+      toast.error('文件大小须在 4 MB 以内');
+      setFile(null);
+      return;
+    }
+    if (!/\.(pdf|txt|md|text)$/i.test(candidate.name)) {
+      toast.error('只支持 PDF、TXT、Markdown');
+      setFile(null);
+      return;
+    }
+    setFile(candidate);
+  };
+
   const handleSubmit = async () => {
     if (!readyToSubmit) return;
     setLoading(true);
@@ -215,10 +237,9 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
         } : undefined,
       });
       if (response.data?.code !== 0) throw new Error(response.data?.message || '提交失败');
-      toast.success("任务已提交");
+      toast.success("节目已进入队列，稍后在节目库查看进度");
       setDrafts(current => ({ ...current, [activeTab]: '' }));
       if (activeTab === PodcastInputType.File) resetFile();
-      // setActiveTab(PodcastInputType.Topic);
       onSubmitSuccess?.();
     } catch (error) {
       console.error(error);
@@ -238,117 +259,56 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
     const inputDisabled = loading;
     switch (activeTab) {
       case PodcastInputType.Topic:
-        return (
-          <CustomTextarea
-            value={topic}
-            onChange={setTopic}
-            placeholder={t('placeholder.topic')}
-            rows={3}
-            disabled={inputDisabled}
-          />
-        );
+        return <CustomTextarea value={topic} onChange={setTopic} placeholder={t('placeholder.topic')} rows={5} disabled={inputDisabled} label="这期想聊什么" />;
 
       case PodcastInputType.Link:
-        return (
-          <CustomTextarea
-            value={topic}
-            onChange={setTopic}
-            placeholder={t('placeholder.link')}
-            rows={3}
-            disabled={inputDisabled}
-          />
-        );
+        return <CustomTextarea value={topic} onChange={setTopic} placeholder={t('placeholder.link')} rows={3} disabled={inputDisabled} label="要讲的网页" />;
 
       case PodcastInputType.FrontPage:
-        return (
-          <CustomTextarea
-            value={topic}
-            onChange={setTopic}
-            placeholder={t('placeholder.front_page')}
-            rows={3}
-            disabled={inputDisabled}
-          />
-        );
+        return <CustomTextarea value={topic} onChange={setTopic} placeholder={t('placeholder.front_page')} rows={3} disabled={inputDisabled} label="要浏览的列表页" />;
+
+      case PodcastInputType.LongText:
+        return <CustomTextarea value={topic} onChange={setTopic} placeholder={t('placeholder.long_text')} rows={6} disabled={inputDisabled} label="资料正文" />;
 
       case PodcastInputType.File:
         return (
-          <div className="w-full">
+          <div className="flex flex-col gap-2">
+            <span className="text-sm font-semibold text-ink">要讲的文件</span>
             <div
-              className="relative rounded-xl border border-dashed border-indigo-300 bg-indigo-50/60 p-6 text-center dark:border-indigo-800 dark:bg-indigo-950/30 sm:p-8"
+              onDragOver={event => { event.preventDefault(); if (!inputDisabled) setDragging(true); }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={event => { event.preventDefault(); setDragging(false); if (!inputDisabled) acceptFile(event.dataTransfer.files?.[0]); }}
+              className={`flex flex-col items-center gap-3 rounded-control border border-dashed px-6 py-8 text-center transition-colors ${dragging ? 'border-brand bg-brand-tint' : 'border-rule-strong bg-paper'}`}
             >
-              {/* 光泽效果 */}
-              <div className="absolute inset-0 rounded-xl sm:rounded-2xl bg-gradient-to-br from-white/30 via-transparent to-transparent pointer-events-none"></div>
-
-              <div className="relative z-10">
-                <div className="mb-3 sm:mb-4">
-                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-100 text-xl dark:bg-indigo-900 sm:h-14 sm:w-14">
-                    📁
-                  </div>
-                </div>
-                <p className="text-base sm:text-lg font-semibold text-gray-700 dark:text-gray-200 mb-1 sm:mb-2">
-                  {t('placeholder.upload_file')}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  支持 PDF、TXT、Markdown，最大 4 MB；扫描版 PDF 暂不支持文字识别
-                </p>
-                <input
-                  type="file"
-                  accept=".pdf,.txt,.md,.text"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      if (file.size > 4_000_000) {
-                        toast.error('文件大小须在 4 MB 以内');
-                        e.target.value = '';
-                        setFile(null);
-                      } else setFile(file);
-                    }
-                  }}
-                  id="file-upload"
-                  disabled={inputDisabled}
-                />
-                <label
-                  htmlFor="file-upload"
-                  className={`mt-4 inline-block cursor-pointer rounded-lg bg-indigo-700 px-5 py-2.5 text-sm font-medium text-white hover:bg-indigo-800 ${inputDisabled ? 'pointer-events-none cursor-not-allowed opacity-50' : ''}`}
-                >
-                  选择文件
-                </label>
-              </div>
+              <span className="grid h-12 w-12 place-items-center rounded-full bg-brand-tint text-brand">
+                <FileUp className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <p className="text-sm font-semibold text-ink">{t('placeholder.upload_file')}</p>
+              <p className="text-xs text-ink-soft">{t('placeholder.upload_file_tips')}；扫描版 PDF 暂不支持文字识别</p>
+              <input
+                type="file"
+                accept=".pdf,.txt,.md,.text"
+                className="sr-only"
+                onChange={(e) => { acceptFile(e.target.files?.[0]); if (!e.target.files?.[0]) e.target.value = ''; }}
+                id="file-upload"
+                disabled={inputDisabled}
+              />
+              <label htmlFor="file-upload" className={`ys-btn ys-btn-secondary cursor-pointer ${inputDisabled ? 'pointer-events-none opacity-50' : ''}`}>
+                选择文件
+              </label>
             </div>
 
             {file && (
-              <div
-                className="relative mt-3 overflow-hidden rounded-lg border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-800 dark:bg-emerald-950/30 sm:p-4"
-              >
-                <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent pointer-events-none"></div>
-                <p className="text-xs text-emerald-700 dark:text-emerald-300 relative z-10 font-medium">
-                  已选择：{file?.name}
-                </p>
-                <button
-                  type="button"
-                  onClick={resetFile}
-                  className="absolute top-2 right-2 z-20 text-gray-400 hover:text-red-500 bg-white/70 dark:bg-gray-800/70 rounded-full p-1 shadow transition-colors"
-                  title="移除文件"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+              <div className="flex items-center gap-3 rounded-control border border-voice-rail bg-voice-tint px-3 py-2.5 text-sm text-voice-deep">
+                <FileText className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <span className="min-w-0 flex-1 truncate font-medium">{file.name}</span>
+                <span className="shrink-0 text-xs tabular-nums">{(file.size / 1024).toFixed(0)} KB</span>
+                <button type="button" onClick={resetFile} aria-label="移除文件" className="grid h-7 w-7 shrink-0 place-items-center rounded-md hover:bg-sheet">
+                  <X className="h-4 w-4" aria-hidden="true" />
                 </button>
               </div>
             )}
           </div>
-        );
-
-      case PodcastInputType.LongText:
-        return (
-          <CustomTextarea
-            value={topic}
-            onChange={setTopic}
-            placeholder={t('placeholder.long_text')}
-            rows={4}
-            disabled={inputDisabled}
-          />
         );
 
       default:
@@ -357,53 +317,44 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
   };
 
   return (
-    <div
-      className="relative z-20 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-6 lg:p-8"
-    >
-      {/* 顶部光泽效果 */}
-      <div className="absolute inset-0 rounded-2xl sm:rounded-3xl bg-gradient-to-br from-white/30 via-transparent to-transparent pointer-events-none"></div>
-
-      <div className="relative">
-        {/* Tab Navigation */}
-        <div
-          className="mb-6 grid grid-cols-2 gap-2 rounded-xl bg-slate-50 p-2 dark:bg-slate-800 sm:flex"
-        >
-          {tabs.map((tab) => (
+    <div className="flex flex-col gap-5">
+      {/* 资料来源 */}
+      <div role="tablist" aria-label="资料来源" className="ys-seg grid-cols-4 sm:flex">
+        {tabs.map((tab) => {
+          const Icon = tabIcons[tab.id];
+          const active = activeTab === tab.id;
+          return (
             <button
               key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
               onClick={() => handleTabChange(tab.id)}
-              aria-pressed={activeTab === tab.id}
-              className={`relative flex flex-1 items-center justify-center gap-2 rounded-lg border px-3 py-3 text-sm transition-colors ${activeTab === tab.id
-                ? "border-indigo-400 bg-white font-semibold text-indigo-800 shadow-sm dark:bg-indigo-950 dark:text-indigo-200"
-                : "border-transparent text-slate-600 hover:border-slate-200 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-700"}`}
+              className={`ys-seg-item flex-1 ${active ? 'ys-seg-item-active' : ''}`}
               disabled={loading}
             >
-              {activeTab === tab.id && (
-                <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-transparent pointer-events-none rounded-lg sm:rounded-xl"></div>
-              )}
-              <span className="text-sm relative z-10">{tab.icon}</span>
-              <span className="font-semibold relative z-10 hidden xs:inline">{tab.label}</span>
-              <span className="font-semibold relative z-10 xs:hidden">
-                {tab.label}
-              </span>
+              <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <span className="truncate">{tab.label}</span>
             </button>
-          ))}
-        </div>
+          );
+        })}
+      </div>
 
-        {/* Input Section */}
-        <div className="mb-5 sm:mb-6">
-          {renderInputSection()}
-        </div>
+      {renderInputSection()}
 
-        {apiWarning && <div role="status" className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
-          {apiWarning} <Link href={getLocalePath(locale, '/settings')} className="font-semibold underline">查看 API 配置与授权</Link>
-        </div>}
-        {voiceLoadError && <div role="alert" className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
-          {voiceLoadError} <button type="button" onClick={() => setVoiceReload(value => value + 1)} className="font-semibold underline">重新加载</button>
-        </div>}
+      {apiWarning && <div role="status" className="ys-note flex items-start gap-2 bg-warn-tint text-warn-deep">
+        <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+        <span>{apiWarning} <Link href={getLocalePath(locale, '/settings')} className="font-semibold underline">查看 API 配置与授权</Link></span>
+      </div>}
+      {voiceLoadError && <div role="alert" className="ys-note flex items-start gap-2 bg-warn-tint text-warn-deep">
+        <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+        <span>{voiceLoadError} <button type="button" onClick={() => setVoiceReload(value => value + 1)} className="font-semibold underline">重新加载</button></span>
+      </div>}
 
-        {/* Bottom Section with Speed Selector and Create Button */}
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5 lg:items-end">
+      {/* 配音 */}
+      <div className="flex flex-col gap-3">
+        <span className="text-sm font-semibold text-ink">配音</span>
+        <div className="grid gap-3 sm:grid-cols-2">
           <TcSelector value={platform} onChange={(v) => {
             setPlatform(v);
             setOutputLanguage(current => languages[v as Platform]?.some(option => option.id === current) ? current : 'auto');
@@ -412,71 +363,46 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
               setVoiceId_2('');
             }
           }} options={platforms} title={t('platform')} />
+          <TcSelector value={outputLanguage} onChange={setOutputLanguage} options={languages[platform as Platform]} title={t('output_language')} />
           {selectType == SelectType.Select && <TcSelector value={voiceId_1} onChange={setVoiceId_1} options={voiceOptions} title={t('voice_1')} />}
           {selectType == SelectType.Select && <TcSelector value={voiceId_2} onChange={setVoiceId_2} options={voiceOptions} title={t('voice_2')} />}
-          {selectType == SelectType.Input && <label className="min-w-0 text-xs font-medium text-slate-600 dark:text-slate-300">{t('voice_1')}
-            <input type="text" value={voiceId_1} onChange={(e) => setVoiceId_1(e.target.value)} placeholder="Voice ID"
-              className="mt-1 block w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+          {selectType == SelectType.Input && <label className="min-w-0">
+            <span className="ys-label mb-1.5">{t('voice_1')}</span>
+            <input type="text" value={voiceId_1} onChange={(e) => setVoiceId_1(e.target.value)} placeholder="Fish Audio Voice ID" className="ys-field" />
           </label>}
-          {selectType == SelectType.Input && <label className="min-w-0 text-xs font-medium text-slate-600 dark:text-slate-300">{t('voice_2')}
-            <input type="text" value={voiceId_2} onChange={(e) => setVoiceId_2(e.target.value)} placeholder="Voice ID"
-              className="mt-1 block w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+          {selectType == SelectType.Input && <label className="min-w-0">
+            <span className="ys-label mb-1.5">{t('voice_2')}</span>
+            <input type="text" value={voiceId_2} onChange={(e) => setVoiceId_2(e.target.value)} placeholder="Fish Audio Voice ID" className="ys-field" />
           </label>}
-          <TcSelector value={outputLanguage} onChange={setOutputLanguage} options={languages[platform as Platform]} title={t('output_language')} />
-
-          {/* Create Button */}
-          <button
-            onClick={handleSubmit}
-            disabled={!readyToSubmit || loading}
-            className="relative flex min-h-12 items-center justify-center gap-2 overflow-hidden rounded-xl bg-indigo-700 px-6 py-3 font-semibold text-white hover:bg-indigo-800 disabled:cursor-not-allowed disabled:opacity-50 sm:col-span-2 lg:col-span-1"
-          >
-            <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent pointer-events-none rounded-lg sm:rounded-xl"></div>
-            {loading ? (
-              <>
-                <svg className="animate-spin h-4 w-4 text-white dark:text-gray-900 relative z-10" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
-                </svg>
-                <span className="text-xs sm:text-sm font-bold relative z-10 ml-2">{t('create_button_loading')}</span>
-              </>
-            ) : (
-              <>
-                <span className="text-xs sm:text-sm font-bold relative z-10 flex items-center gap-1">
-                  {t('create_button')}
-                </span>
-              </>
-            )}
-          </button>
         </div>
-        {loading && <div role="status" className="mt-3 rounded-lg bg-indigo-50 px-4 py-3 text-sm text-indigo-900 dark:bg-indigo-950 dark:text-indigo-100">
-          <p>{submitPhase === 'upload' ? `正在上传文件${uploadPercent === null ? '…' : ` ${uploadPercent}%`}` : '正在解析素材并创建任务…'}</p>
-          {submitPhase === 'upload' && <div role="progressbar" aria-label="文件上传进度" aria-valuemin={0} aria-valuemax={100}
-            aria-valuenow={uploadPercent ?? undefined} className="mt-2 h-2 overflow-hidden rounded-full bg-indigo-200 dark:bg-indigo-900">
-            <div className="h-full bg-indigo-600 transition-[width]" style={{ width: `${uploadPercent ?? 0}%` }} />
-          </div>}
-          <p className="mt-1 text-xs opacity-75">任务创建后，可在下方“音频与文件”查看生成阶段。</p>
-        </div>}
-        {/* platform tips */}
-        {platformTips[platform as Platform] && (
-          <div className="mt-4 sm:mt-5">
-            <a
-              href={platformTips[platform as Platform]}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-4 py-2 text-xs sm:text-sm bg-gradient-to-r from-indigo-50/80 to-purple-50/60 dark:from-indigo-900/40 dark:to-purple-900/30 rounded-lg sm:rounded-xl hover:scale-[1.02] transition-all duration-300 text-indigo-600 dark:text-indigo-300 hover:text-indigo-700 dark:hover:text-indigo-200 relative overflow-hidden"
-              style={{
-                boxShadow: 'inset 0 2px 10px rgba(99, 102, 241, 0.1), 0 4px 20px rgba(99, 102, 241, 0.05)'
-              }}
-            >
-              <div className="absolute inset-0 bg-gradient-to-br from-white/30 via-transparent to-transparent pointer-events-none rounded-lg sm:rounded-xl"></div>
-              <span className="relative z-10">🔗</span>
-              <span className="relative z-10 font-medium">
-                {t('more_voices_about', { platform: platforms.find(p => p.id == platform)?.label })}
-              </span>
-            </a>
-          </div>
-        )}
       </div>
+
+      {/* 提交 */}
+      <div className="flex flex-col-reverse items-stretch gap-3 pt-1 sm:flex-row sm:items-center sm:justify-between">
+        {platformTips[platform as Platform] ? (
+          <a href={platformTips[platform as Platform]} target="_blank" rel="noopener noreferrer" className="text-sm text-brand hover:text-brand-hover">
+            {t('more_voices_about', { platform: platforms.find(p => p.id == platform)?.label })}
+          </a>
+        ) : <span />}
+        <button
+          type="button"
+          onClick={handleSubmit}
+          disabled={!readyToSubmit || loading}
+          className="ys-btn ys-btn-primary h-12 px-7 text-[15px]"
+        >
+          {loading ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Mic className="h-4 w-4" aria-hidden="true" />}
+          {loading ? t('create_button_loading') : t('create_button')}
+        </button>
+      </div>
+
+      {loading && <div role="status" className="ys-note bg-voice-tint text-voice-deep">
+        <p>{submitPhase === 'upload' ? `正在上传文件${uploadPercent === null ? '…' : ` ${uploadPercent}%`}` : '正在解析资料并创建任务…'}</p>
+        {submitPhase === 'upload' && <div role="progressbar" aria-label="文件上传进度" aria-valuemin={0} aria-valuemax={100}
+          aria-valuenow={uploadPercent ?? undefined} className="mt-2 h-1.5 overflow-hidden rounded-full bg-voice-rail">
+          <div className="h-full rounded-full bg-voice transition-[width]" style={{ width: `${uploadPercent ?? 0}%` }} />
+        </div>}
+        <p className="mt-1 text-xs opacity-80">创建后可在右侧节目库看到生成进度。</p>
+      </div>}
     </div>
   );
 }

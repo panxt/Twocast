@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import { Pause, Play } from 'lucide-react'
 
 export function VoicePlayerButton({ id, sample, label, playingVoiceId, setPlayingVoiceId, audioRefs }: {
   id: string
@@ -48,15 +49,15 @@ export function VoicePlayerButton({ id, sample, label, playingVoiceId, setPlayin
     }).catch(() => { if (audioRef.current === audio) setPlayingVoiceId(null) })
   }
 
-  return <div className="flex items-center gap-2">
+  return <div className="flex items-center gap-2.5">
     {sample ? <>
       <button type="button" onClick={togglePreview} aria-label={`${isPlaying ? '暂停' : '试听'}${label}`}
-        className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-full bg-indigo-600 text-white hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500">
-        {isPlaying ? 'Ⅱ' : '▶'}
+        className={`grid h-8 w-8 flex-shrink-0 place-items-center rounded-full transition-colors ${isPlaying ? 'bg-voice text-brand-on' : 'bg-brand-tint text-brand hover:bg-brand hover:text-brand-on'}`}>
+        {isPlaying ? <Pause className="h-3.5 w-3.5" fill="currentColor" aria-hidden="true" /> : <Play className="ml-0.5 h-3.5 w-3.5" fill="currentColor" aria-hidden="true" />}
       </button>
       <audio ref={element => { audioRef.current = element; audioRefs.current[id] = element }} src={sample}
         preload="none" onEnded={() => setPlayingVoiceId(null)} />
     </> : <span className="h-8 w-8 flex-shrink-0" aria-hidden="true" />}
-    <span className="text-sm text-gray-700 dark:text-gray-300">{label}</span>
+    <span className="text-sm text-ink">{label}</span>
   </div>
 }

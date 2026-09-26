@@ -2,118 +2,60 @@
 
 import * as React from 'react'
 import { Fragment } from 'react'
-import { Menu, RadioGroup, Transition } from '@headlessui/react'
-import { DarkModeSwitch } from './DarkModeSwitch'
-import { Monitor, Moon, Sun } from './icons'
+import { Menu, Transition } from '@headlessui/react'
+import { Monitor, Moon, Sun } from 'lucide-react'
 import { useTheme } from './ThemeContext'
-import { useOuterClick } from '../utils/useOuterClick'
-import { useParams } from 'next/navigation'
-import { LocaleTypes } from '@/i18n/settings'
-import { useTranslation } from '@/i18n/client'
+
+const options = [
+  { id: 'light', label: '浅色', Icon: Sun },
+  { id: 'dark', label: '深色', Icon: Moon },
+  { id: 'system', label: '跟随系统', Icon: Monitor },
+] as const
 
 const ThemeSwitch = () => {
-  const locale = useParams()?.locale as LocaleTypes
-  const { t } = useTranslation(locale, 'common')
   const { theme, setTheme, mounted } = useTheme()
-  const [menuOpen, setMenuOpen] = React.useState(false)
-  const [darkModeChecked, setDarkModeChecked] = React.useState(theme === 'dark')
-  const menubarRef = React.useRef<HTMLDivElement>(null)
-
-  useOuterClick(menubarRef, () => setMenuOpen(false))
+  const [systemDark, setSystemDark] = React.useState(false)
 
   React.useEffect(() => {
-    setDarkModeChecked(theme === 'dark')
-  }, [theme])
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    const sync = () => setSystemDark(media.matches)
+    sync()
+    media.addEventListener('change', sync)
+    return () => media.removeEventListener('change', sync)
+  }, [])
 
-  const handleThemeChange = (newTheme: string) => {
-    setTheme(newTheme)
-    setMenuOpen(false)
-  }
-
-  // 这个会影响 pagespeed 的 CLS 分数
-  // if (!mounted) return null
+  const isDark = theme === 'dark' || (theme === 'system' && systemDark)
+  const CurrentIcon = mounted && isDark ? Moon : Sun
 
   return (
-    <div ref={menubarRef} className="mr-5 hidden sm:block">
-      <Menu as="div" className="relative mt-1 inline-block text-left">
-        <Menu.Button aria-label={t('theme')}>
-          <DarkModeSwitch
-            checked={darkModeChecked}
-            onChange={(isChecked) => setDarkModeChecked(isChecked)}
-            onClick={() => setMenuOpen(!menuOpen)}
-            size={24}
-          />
-        </Menu.Button>
-        <Transition
-          show={menuOpen}
-          as={Fragment}
-          enter="transition-all ease-out duration-300"
-          enterFrom="opacity-0 scale-95 translate-y-[-10px]"
-          enterTo="opacity-100 scale-100 translate-y-0"
-          leave="transition-all ease-in duration-200"
-          leaveFrom="opacity-100 scale-100 translate-y-0"
-          leaveTo="opacity-0 scale-95 translate-y-[10px]"
-        >
-          <Menu.Items className="absolute right-0 z-50 mt-2 w-32 origin-top-right divide-y divide-gray-100 rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none dark:bg-gray-800 dark:text-primary-50">
-            <RadioGroup value={theme} onChange={handleThemeChange}>
-              <div className="p-1">
-                <RadioGroup.Option value="light">
-                  <Menu.Item>
-                    {({ active }) => (
-                      <button
-                        onClick={() => handleThemeChange('light')}
-                        className={`${
-                          active
-                            ? 'bg-gray-100 dark:bg-gray-600'
-                            : 'hover:bg-gray-100 dark:hover:bg-gray-600'
-                        } group flex w-full items-center rounded-md px-2 py-2 text-sm hover:text-primary-500 dark:hover:text-primary-500`}
-                      >
-                        <Sun />
-                        <span className="ml-2">{t('light')}</span>
-                      </button>
-                    )}
-                  </Menu.Item>
-                </RadioGroup.Option>
-                <RadioGroup.Option value="dark">
-                  <Menu.Item>
-                    {({ active }) => (
-                      <button
-                        onClick={() => handleThemeChange('dark')}
-                        className={`${
-                          active
-                            ? 'bg-gray-100 dark:bg-gray-600'
-                            : 'hover:bg-gray-100 dark:hover:bg-gray-600'
-                        } group flex w-full items-center rounded-md px-2 py-2 text-sm hover:text-primary-500 dark:hover:text-primary-500`}
-                      >
-                        <Moon />
-                        <span className="ml-2">{t('dark')}</span>
-                      </button>
-                    )}
-                  </Menu.Item>
-                </RadioGroup.Option>
-                <RadioGroup.Option value="system">
-                  <Menu.Item>
-                    {({ active }) => (
-                      <button
-                        onClick={() => handleThemeChange('system')}
-                        className={`${
-                          active
-                            ? 'bg-gray-100 dark:bg-gray-600'
-                            : 'hover:bg-gray-100 dark:hover:bg-gray-600'
-                        } group flex w-full items-center rounded-md px-2 py-2 text-sm hover:text-primary-500 dark:hover:text-primary-500`}
-                      >
-                        <Monitor />
-                        <span className="ml-2">{t('system')}</span>
-                      </button>
-                    )}
-                  </Menu.Item>
-                </RadioGroup.Option>
-              </div>
-            </RadioGroup>
-          </Menu.Items>
-        </Transition>
-      </Menu>
-    </div>
+    <Menu as="div" className="relative ml-1">
+      <Menu.Button aria-label="切换外观主题" className="ys-icon-btn border border-rule bg-sheet">
+        <CurrentIcon className="h-[18px] w-[18px]" aria-hidden="true" />
+      </Menu.Button>
+      <Transition
+        as={Fragment}
+        enter="transition ease-out duration-150"
+        enterFrom="opacity-0 -translate-y-1"
+        enterTo="opacity-100 translate-y-0"
+        leave="transition ease-in duration-100"
+        leaveFrom="opacity-100 translate-y-0"
+        leaveTo="opacity-0 -translate-y-1"
+      >
+        <Menu.Items className="ys-sheet absolute right-0 z-50 mt-2 w-36 origin-top-right p-1 shadow-bar focus:outline-none">
+          {options.map(({ id, label, Icon }) => (
+            <Menu.Item key={id}>
+              {({ active }) => (
+                <button type="button" onClick={() => setTheme(id)} aria-current={theme === id ? 'true' : undefined}
+                  className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm ${active ? 'bg-paper' : ''} ${theme === id ? 'font-semibold text-brand' : 'text-ink'}`}>
+                  <Icon className="h-4 w-4" aria-hidden="true" />
+                  {label}
+                </button>
+              )}
+            </Menu.Item>
+          ))}
+        </Menu.Items>
+      </Transition>
+    </Menu>
   )
 }
 

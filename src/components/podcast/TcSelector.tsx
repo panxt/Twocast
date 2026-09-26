@@ -1,5 +1,5 @@
 'use client'
-import { ChevronDownIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
+import { ChevronDown, Search } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 
 export interface OptionItem {
@@ -14,6 +14,12 @@ export function TcSelector({value, onChange, options, title}: {title?: string, v
     const [isOpen, setIsOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
     const containerRef = useRef<HTMLDivElement>(null);
+    const searchRef = useRef<HTMLInputElement>(null);
+
+    // 打开后把光标放进搜索框（等价于 autoFocus，但只在用户主动打开时发生）
+    useEffect(() => {
+        if (isOpen) searchRef.current?.focus();
+    }, [isOpen]);
 
     // 监听点击外部区域时关闭下拉菜单
     useEffect(() => {
@@ -22,15 +28,20 @@ export function TcSelector({value, onChange, options, title}: {title?: string, v
                 setIsOpen(false);
             }
         }
+        function handleEscape(event: KeyboardEvent) {
+            if (event.key === 'Escape') setIsOpen(false);
+        }
 
         // 只在下拉菜单打开时添加监听器
         if (isOpen) {
             document.addEventListener('mousedown', handleClickOutside);
+            document.addEventListener('keydown', handleEscape);
         }
 
         // 清理函数
         return () => {
             document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('keydown', handleEscape);
         };
     }, [isOpen]);
 
@@ -47,53 +58,47 @@ export function TcSelector({value, onChange, options, title}: {title?: string, v
       visibleOptions.pop();
       visibleOptions.unshift(selectedOption);
     }
-    const optionClass = 'block w-full px-3 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm hover:bg-indigo-50 dark:hover:bg-indigo-900/30 relative z-10';
+    const optionClass = (active: boolean) =>
+      `block w-full px-3 py-2.5 text-left text-sm transition-colors hover:bg-paper ${active ? 'bg-brand-tint text-brand' : 'text-ink'}`;
 
     const selectedLabel = options.find(option => option.id === value)?.label || '请选择';
 
     return (
         <div className="relative min-w-0" ref={containerRef}>
-          {title && <span className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">{title}</span>}
+          {title && <span className="ys-label mb-1.5">{title}</span>}
           <button type="button"
               onClick={() => setIsOpen(!isOpen)}
             aria-label={title ? `${title}：${selectedLabel}` : selectedLabel}
             aria-expanded={isOpen}
-            className="relative flex w-full min-w-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left dark:border-slate-700 dark:bg-slate-800"
+            aria-haspopup="listbox"
+            className={`ys-field flex items-center gap-2 text-left ${isOpen ? 'border-brand ring-2 ring-focus' : ''}`}
           >
-            <div className="absolute inset-0 bg-gradient-to-br from-white/30 to-transparent pointer-events-none rounded-lg sm:rounded-xl"></div>
-            <span className="relative z-10 min-w-0 truncate text-xs font-semibold text-gray-700 dark:text-gray-200 sm:text-sm">{selectedLabel}</span>
-            <ChevronDownIcon className="w-3 h-3 sm:w-4 sm:h-4 text-gray-500 ml-auto relative z-10" />
+            <span className="min-w-0 flex-1 truncate">{selectedLabel}</span>
+            <ChevronDown className={`h-4 w-4 shrink-0 text-ink-soft transition-transform ${isOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
           </button>
-          
-          {isOpen && (
-            <div 
-              className="absolute left-0 right-0 top-full z-50 mt-1 min-w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800 sm:right-auto sm:min-w-48"
-            >
-              <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-transparent pointer-events-none rounded-lg sm:rounded-xl"></div>
-              
-              {/* Title section */}
-              {title && (
-                <div className="px-3 sm:px-4 py-3 bg-gradient-to-r from-gray-100/90 to-gray-200/90 dark:from-gray-800/90 dark:to-gray-700/90 border-b border-gray-200/50 dark:border-gray-600/50 text-center">
-                  <h3 className="text-sm sm:text-base font-semibold text-gray-800 dark:text-gray-100 tracking-wide">{title}</h3>
-                </div>
-              )}
 
+          {isOpen && (
+            <div role="listbox" aria-label={title}
+              className="ys-sheet absolute left-0 right-0 top-full z-50 mt-1.5 min-w-full overflow-hidden shadow-bar sm:right-auto sm:min-w-56"
+            >
               {/* Search input */}
-              <div className="relative px-3 sm:px-4 py-2 border-b border-gray-100 dark:border-gray-700">
-                <div className="relative">
+              <div className="border-b border-rule p-2">
+                <label className="relative block">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" aria-hidden="true" />
                   <input
                     type="text"
+                    ref={searchRef}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="搜索选项…"
-                    className="w-full px-8 py-1.5 text-xs sm:text-sm bg-white/50 dark:bg-gray-800/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 border border-gray-100/50 dark:border-gray-700/50"
+                    placeholder={title ? `搜索${title}` : '搜索'}
+                    aria-label={title ? `搜索${title}` : '搜索选项'}
+                    className="ys-field-sm pl-8"
                   />
-                  <MagnifyingGlassIcon className="w-4 h-4 text-gray-400 absolute left-2 top-1/2 -translate-y-1/2" />
-                </div>
+                </label>
               </div>
 
               {/* Options list with max height and scroll */}
-              <div className="max-h-[300px] overflow-y-auto">
+              <div className="max-h-[300px] overflow-y-auto py-1">
                 {filteredOptions.length > 0 ? (
                   visibleOptions.map((option) => {
                     const choose = () => {
@@ -101,22 +106,23 @@ export function TcSelector({value, onChange, options, title}: {title?: string, v
                         setIsOpen(false);
                         setSearchQuery("");
                     };
-                    return option.render ? <div key={option.id} role="button" tabIndex={0}
-                      aria-label={`选择${option.label}`} className={optionClass} onClick={choose}
+                    const active = option.id === value;
+                    return option.render ? <div key={option.id} role="option" aria-selected={active} tabIndex={0}
+                      aria-label={`选择${option.label}`} className={optionClass(active)} onClick={choose}
                       onKeyDown={event => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); choose(); } }}>
                       {option.render(option)}
-                    </div> : <button key={option.id} type="button" onClick={choose} className={optionClass}>
-                      <span className="font-medium text-gray-800 dark:text-gray-100">{option.label}</span>
-                      {option.description && <span className="mt-0.5 block whitespace-normal text-xs text-gray-500 dark:text-gray-400">{option.description}</span>}
+                    </div> : <button key={option.id} type="button" role="option" aria-selected={active} onClick={choose} className={optionClass(active)}>
+                      <span className="font-medium">{option.label}</span>
+                      {option.description && <span className="mt-0.5 block whitespace-normal text-xs text-ink-soft">{option.description}</span>}
                     </button>;
                   })
                 ) : (
-                  <div className="px-3 sm:px-4 py-3 text-xs sm:text-sm text-gray-500 dark:text-gray-400 text-center">
-                    没有匹配选项
+                  <div className="px-3 py-4 text-center text-sm text-ink-soft">
+                    没有匹配的选项
                   </div>
                 )}
               </div>
-              {filteredOptions.length > maxVisible && <p className="border-t px-3 py-2 text-center text-xs text-gray-500 dark:border-gray-700">
+              {filteredOptions.length > maxVisible && <p className="border-t border-rule px-3 py-2 text-center text-xs text-ink-soft">
                 显示 {maxVisible} / {filteredOptions.length} 项，搜索可找到更多
               </p>}
             </div>

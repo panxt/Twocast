@@ -1,7 +1,5 @@
 import TwSizeIndicator from "src/components/helper/TwSizeIndicator";
 import {ThemeProvider} from "src/components/theme/ThemeContext";
-import siteMetadata from "@/data/siteMetadata";
-import SectionWideContainer from "src/components/SectionWideContainer";
 import Header from "src/components/Header";
 import Footer from "src/components/Footer";
 import { Toaster } from "sonner";
@@ -9,24 +7,17 @@ import { AudioPlayerProvider } from "@/contexts/AudioPlayerContext";
 import GlobalAudioPlayer from "@/components/GlobalAudioPlayer";
 
 export default function Body({children, locale}) {
-  const bodyStyle = {
-    // fontFamily: 'DM Mono',
-    // backgroundImage: 'radial-gradient(#000 1px,transparent 0)',
-    // backgroundSize: '30px 30px',
-  }
   return (
-    <body className="bg-no-repeat bg-top bg-cover dark:bg-slate-900">
+    <body className="min-h-screen bg-paper font-sans text-ink">
     <Toaster position="top-center" richColors />
     <TwSizeIndicator />
     <ThemeProvider>
       <AudioPlayerProvider>
-        <SectionWideContainer>
-          <div className="flex h-screen flex-col justify-between font-sans">
-              <Header />
-              <main className="mb-auto">{children}</main>
-            <Footer />
-          </div>
-        </SectionWideContainer>
+        <div className="flex min-h-screen flex-col">
+          <Header />
+          <main className="flex-1">{children}</main>
+          <Footer />
+        </div>
         {/* 全局音频播放器 */}
         <GlobalAudioPlayer />
       </AudioPlayerProvider>

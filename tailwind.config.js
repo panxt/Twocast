@@ -37,12 +37,60 @@ const baseConfig = {
         14: '3.5rem',
       },
       fontFamily: {
-        sans: ['var(--font-space-grotesk)', ...fontFamily.sans],
+        sans: ['"PingFang SC"', '"Hiragino Sans GB"', '"Noto Sans SC"', '"Microsoft YaHei"', ...fontFamily.sans],
+        display: ['var(--font-display)', '"Songti SC"', '"Noto Serif SC"', 'SimSun', 'serif'],
+      },
+      borderRadius: {
+        control: '10px',
       },
       colors: {
+        // 驿·声笺 品牌令牌：取值在 src/css/tailwind.css 的 :root / .dark 中切换，
+        // 组件里直接用 bg-sheet / text-ink / border-rule，不需要再写 dark: 变体。
+        paper: 'var(--ys-paper)',
+        sheet: {
+          DEFAULT: 'var(--ys-sheet)',
+          raised: 'var(--ys-sheet-raised)',
+        },
+        rule: {
+          DEFAULT: 'var(--ys-rule)',
+          strong: 'var(--ys-rule-strong)',
+        },
+        ink: {
+          DEFAULT: 'var(--ys-ink)',
+          soft: 'var(--ys-ink-soft)',
+          faint: 'var(--ys-ink-faint)',
+        },
+        brand: {
+          DEFAULT: 'var(--ys-brand)',
+          hover: 'var(--ys-brand-hover)',
+          tint: 'var(--ys-brand-tint)',
+          on: 'var(--ys-brand-on)',
+        },
+        voice: {
+          DEFAULT: 'var(--ys-voice)',
+          tint: 'var(--ys-voice-tint)',
+          rail: 'var(--ys-voice-rail)',
+          deep: 'var(--ys-voice-deep)',
+        },
+        alert: {
+          DEFAULT: 'var(--ys-alert)',
+          tint: 'var(--ys-alert-tint)',
+          deep: 'var(--ys-alert-deep)',
+        },
+        warn: {
+          DEFAULT: 'var(--ys-warn)',
+          tint: 'var(--ys-warn-tint)',
+          deep: 'var(--ys-warn-deep)',
+        },
+        focus: 'var(--ys-focus)',
+        // 旧模板组件（Share / langswitch / layouts）仍引用的调色板，保留。
         primary: colors.pink,
         heading: colors.blue,
         gray: colors.gray,
+      },
+      boxShadow: {
+        seg: '0 1px 2px rgba(23, 38, 44, 0.08)',
+        bar: '0 -8px 24px rgba(23, 38, 44, 0.06)',
       },
       typography: ({ theme }) => ({
         DEFAULT: {

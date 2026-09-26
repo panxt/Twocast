@@ -4,6 +4,195 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ---------------------------------------------------------------------------
+ * 驿·声笺 设计令牌
+ * 取色自品牌标记的蓝→青渐变：纸底偏冷，墨字偏蓝黑；
+ * 驿蓝只给主要动作，声青只给"声音在流动"的状态（播放 / 进度 / 完成）。
+ * ------------------------------------------------------------------------- */
+@layer base {
+  :root {
+    --ys-paper: #f2f5f4;
+    --ys-sheet: #ffffff;
+    --ys-sheet-raised: #f7faf9;
+    --ys-rule: #d8e0de;
+    --ys-rule-strong: #c3cfcc;
+    --ys-ink: #17262c;
+    --ys-ink-soft: #54676e;
+    --ys-ink-faint: #8a9aa0;
+    --ys-brand: #1f5fd6;
+    --ys-brand-hover: #1a4fb5;
+    --ys-brand-tint: #e4ecfb;
+    --ys-brand-on: #ffffff;
+    --ys-voice: #0e8c82;
+    --ys-voice-deep: #0b6b63;
+    --ys-voice-tint: #dcf2ee;
+    --ys-voice-rail: #a8e0d2;
+    --ys-alert: #b3261e;
+    --ys-alert-deep: #8f1d17;
+    --ys-alert-tint: #fbe9e7;
+    --ys-warn: #b45309;
+    --ys-warn-deep: #7c3a06;
+    --ys-warn-tint: #fef3e2;
+    --ys-focus: rgba(31, 95, 214, 0.32);
+    color-scheme: light;
+  }
+
+  .dark {
+    --ys-paper: #0e171b;
+    --ys-sheet: #152126;
+    --ys-sheet-raised: #12292b;
+    --ys-rule: #25353c;
+    --ys-rule-strong: #34474f;
+    --ys-ink: #e8efee;
+    --ys-ink-soft: #9aaeb3;
+    --ys-ink-faint: #6f858c;
+    --ys-brand: #6b9bf5;
+    --ys-brand-hover: #8fb3f8;
+    --ys-brand-tint: #1b2a3f;
+    --ys-brand-on: #0e171b;
+    --ys-voice: #3fc2b4;
+    --ys-voice-deep: #7fe0d3;
+    --ys-voice-tint: #123b38;
+    --ys-voice-rail: #1f5b56;
+    --ys-alert: #f2a39c;
+    --ys-alert-deep: #f2a39c;
+    --ys-alert-tint: #3a1f1d;
+    --ys-warn: #f0b35c;
+    --ys-warn-deep: #f5c97f;
+    --ys-warn-tint: #3a2a12;
+    --ys-focus: rgba(107, 155, 245, 0.4);
+    color-scheme: dark;
+  }
+
+  html {
+    @apply bg-paper text-ink antialiased;
+  }
+
+  body {
+    @apply bg-paper text-ink;
+  }
+
+  ::selection {
+    background: var(--ys-brand-tint);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ys-brand);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * 复用的界面件：笺（sheet）、输入、按钮、分段、标签
+ * ------------------------------------------------------------------------- */
+@layer components {
+  .ys-sheet {
+    @apply rounded-2xl border border-rule bg-sheet;
+  }
+
+  .ys-title {
+    @apply font-display font-bold tracking-tight text-ink;
+  }
+
+  .ys-label {
+    @apply block text-xs font-medium text-ink-soft;
+  }
+
+  .ys-field {
+    @apply block w-full rounded-control border border-rule bg-sheet px-3 text-sm text-ink placeholder:text-ink-faint;
+    @apply focus:border-brand focus:outline-none focus:ring-2 focus:ring-focus;
+    @apply disabled:cursor-not-allowed disabled:opacity-60;
+    min-height: 2.75rem;
+  }
+
+  .ys-field-sm {
+    @apply block w-full rounded-lg border border-rule bg-sheet px-2.5 py-1.5 text-sm text-ink placeholder:text-ink-faint;
+    @apply focus:border-brand focus:outline-none focus:ring-2 focus:ring-focus;
+  }
+
+  .ys-btn {
+    @apply inline-flex min-h-11 items-center justify-center gap-2 whitespace-nowrap rounded-control px-4 text-sm font-semibold transition-colors;
+    @apply disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .ys-btn-sm {
+    @apply inline-flex min-h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 text-xs font-semibold transition-colors;
+    @apply disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .ys-btn-primary {
+    @apply bg-brand text-brand-on hover:bg-brand-hover;
+  }
+
+  .ys-btn-secondary {
+    @apply border border-rule bg-sheet text-ink hover:bg-paper;
+  }
+
+  .ys-btn-quiet {
+    @apply text-ink-soft hover:bg-paper hover:text-ink;
+  }
+
+  .ys-btn-danger {
+    @apply border border-rule bg-sheet text-alert hover:border-alert hover:bg-alert-tint;
+  }
+
+  .ys-icon-btn {
+    @apply inline-grid h-10 w-10 shrink-0 place-items-center rounded-control text-ink-soft transition-colors hover:bg-paper hover:text-ink;
+    @apply disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
+  .ys-seg {
+    @apply grid gap-1 rounded-xl bg-paper p-1;
+  }
+
+  .ys-seg-item {
+    @apply inline-flex min-h-10 items-center justify-center gap-1.5 rounded-[9px] px-3 text-sm text-ink-soft transition-colors hover:text-ink;
+    @apply disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .ys-seg-item-active {
+    @apply bg-sheet font-semibold text-ink shadow-seg;
+  }
+
+  .ys-pill {
+    @apply inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold;
+  }
+
+  .ys-tag {
+    @apply inline-flex items-center rounded-md bg-paper px-2 py-0.5 text-xs text-ink-soft;
+  }
+
+  .ys-note {
+    @apply rounded-control px-4 py-3 text-sm;
+  }
+
+  .ys-range {
+    @apply h-1 w-full cursor-pointer appearance-none rounded-full bg-rule;
+    accent-color: var(--ys-voice);
+  }
+
+  .ys-range::-webkit-slider-thumb {
+    @apply h-3.5 w-3.5 appearance-none rounded-full border-2 border-voice bg-sheet;
+  }
+
+  .ys-range::-moz-range-thumb {
+    @apply h-3.5 w-3.5 rounded-full border-2 border-voice bg-sheet;
+  }
+
+  .ys-code {
+    @apply block break-all rounded-control border border-rule bg-paper p-3 font-mono text-sm text-ink;
+  }
+}
+
 .task-list-item::before {
   @apply hidden;
 }
@@ -25,16 +214,16 @@
 }
 
 .overflow-y-auto::-webkit-scrollbar {
-  width: 2px;
+  width: 6px;
 }
 
 .overflow-y-auto::-webkit-scrollbar-track {
-  background-color: #f1f1f1;
+  background-color: transparent;
 }
 
 .overflow-y-auto::-webkit-scrollbar-thumb {
-  background-color: #9c9c9c;
-  border-radius: 5px;
+  background-color: var(--ys-rule-strong);
+  border-radius: 999px;
 }
 
 /* https://stackoverflow.com/questions/61083813/how-to-avoid-internal-autofill-selected-style-to-be-applied */
