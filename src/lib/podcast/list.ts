@@ -6,6 +6,7 @@ import { TaskVO } from '@/lib/client-api/types/TaskVO'
 import { TaskStatus } from '@/types/task'
 import { getTaskStatusHuman } from '@/utils/task'
 import { taskScopeWhere } from './scope'
+import { coverUrlFor } from './cover-url'
 
 export type EpisodeListViewer = {
   userId: number
@@ -37,6 +38,7 @@ export async function loadEpisodeList(viewer: EpisodeListViewer, options: {
     uuid: tasksTable.uuid, userId: tasksTable.userId, userEmail: tasksTable.userEmail,
     status: tasksTable.status, statusReason: tasksTable.statusReason,
     folderPath: tasksTable.folderPath, labels: tasksTable.labels, visibility: tasksTable.visibility,
+    coverLocation: tasksTable.coverLocation,
     createdAt: tasksTable.createdAt, updatedAt: tasksTable.updatedAt,
     ownerName: sessionsTable.displayName,
     fileName: sql<string | null>`${tasksTable.userInputs}::jsonb ->> 'fileName'`,
@@ -60,6 +62,7 @@ export async function loadEpisodeList(viewer: EpisodeListViewer, options: {
       folder_path: task.folderPath,
       labels: task.labels,
       visibility: task.visibility,
+      cover_url: coverUrlFor(task.uuid, task.coverLocation),
       error: task.status === TaskStatus.Failed ? reason?.detail || reason?.msg || null : null,
       status: task.status as TaskStatus,
       status_human: getTaskStatusHuman(task.status as TaskStatus),

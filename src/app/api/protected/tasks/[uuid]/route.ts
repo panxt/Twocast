@@ -6,7 +6,8 @@ import { getCurrentUser } from '@/utils/user'
 import { TaskStatus } from '@/types/task'
 import { PodcastStep, TaskUserInput } from '@/lib/podcast/types'
 import { taskGetStepItem } from '@/lib/podcast/task'
-import { removeAudio, removeUpload } from '@/lib/podcast/storage'
+import { removeAudio, removeCover, removeUpload } from '@/lib/podcast/storage'
+import { isValidFolderPath } from '@/lib/podcast/folder'
 import { canManageTask } from '@/lib/podcast/access'
 
 export async function DELETE(_: NextRequest, context: { params: Promise<{ uuid: string }> }) {
@@ -27,6 +28,7 @@ export async function DELETE(_: NextRequest, context: { params: Promise<{ uuid: 
   if (audioFiles.length) await removeAudio(audioFiles)
   const upload = (task.userInputs as TaskUserInput)?.fileLocation
   if (upload) await removeUpload(upload)
+  if (task.coverLocation) await removeCover(task.coverLocation).catch(() => undefined)
   await getDb().delete(tasksTable).where(and(eq(tasksTable.id, task.id), eq(tasksTable.status, task.status)))
   return NextResponse.json({ ok: true })
 }
@@ -49,10 +51,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ u
   if (visibility === 'team' && task.status !== TaskStatus.Success) {
     return NextResponse.json({ error: '节目完成后才能共享给团队' }, { status: 409 })
   }
-  if (typeof folderPath !== 'string' || !folderPath.startsWith('/') || !folderPath.endsWith('/') ||
-      folderPath.length > 255 || folderPath.includes('\\') ||
-      folderPath.split('/').some((segment, index) => index > 0 && index < folderPath.split('/').length - 1 &&
-        (!segment || segment.length > 40 || [...segment].some(character => character.charCodeAt(0) < 32)))) {
+  if (!isValidFolderPath(folderPath)) {
     return NextResponse.json({ error: '目录格式须为 /目录/子目录/' }, { status: 400 })
   }
   if (!Array.isArray(labels) || labels.length > 8 || labels.some(label => typeof label !== 'string' || !label.trim() || label.length > 24)) {

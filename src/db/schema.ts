@@ -28,6 +28,8 @@ export const tasksTable = pgTable('tasks', {
   folderPath: varchar('folder_path', { length: 255 }).notNull().default('/'),
   labels: json('labels').$type<string[]>().notNull().default([]),
   visibility: varchar('visibility', { length: 8 }).$type<'private' | 'team'>().notNull().default('private'),
+  // 封面：supabase-cover:<file> 或本地 /assets/covers/<file>
+  coverLocation: varchar('cover_location', { length: 255 }),
   // 创建时间
   createdAt: timestamp('created_at', { withTimezone: true }),
   // 更新时间

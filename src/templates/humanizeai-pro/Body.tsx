@@ -1,7 +1,9 @@
+import { Suspense } from "react";
 import TwSizeIndicator from "src/components/helper/TwSizeIndicator";
 import {ThemeProvider} from "src/components/theme/ThemeContext";
 import Header from "src/components/Header";
 import Footer from "src/components/Footer";
+import Sidebar from "src/components/shell/Sidebar";
 import { Toaster } from "sonner";
 import { AudioPlayerProvider } from "@/contexts/AudioPlayerContext";
 import GlobalAudioPlayer from "@/components/GlobalAudioPlayer";
@@ -13,10 +15,13 @@ export default function Body({children, locale}) {
     <TwSizeIndicator />
     <ThemeProvider>
       <AudioPlayerProvider>
-        <div className="flex min-h-screen flex-col">
-          <Header />
-          <main className="flex-1">{children}</main>
-          <Footer />
+        <div className="flex min-h-screen">
+          <Suspense fallback={null}><Sidebar /></Suspense>
+          <div className="flex min-w-0 flex-1 flex-col">
+            <Header />
+            <main className="flex-1">{children}</main>
+            <Footer />
+          </div>
         </div>
         {/* 全局音频播放器 */}
         <GlobalAudioPlayer />

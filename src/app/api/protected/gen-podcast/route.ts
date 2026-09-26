@@ -20,6 +20,7 @@ import { and, count, eq, gte, inArray } from 'drizzle-orm';
 import { start } from 'workflow/api';
 import { generatePodcastWorkflow } from '@/lib/podcast/workflow';
 import { reserveApiAccess, releaseApiGrants } from '@/lib/api-access';
+import { isValidFolderPath } from '@/lib/podcast/folder';
 
 export async function POST(req: Request) {
   const user = await getCurrentUser()
@@ -48,6 +49,10 @@ export async function POST(req: Request) {
   const voice_id_2 = formData.get('voice_id_2')
   const file = formData.get('file')
   const language = formData.get('language')
+  const folderPath = formData.get('folder_path')
+  if (folderPath !== null && (typeof folderPath !== 'string' || (folderPath && !isValidFolderPath(folderPath)))) {
+    return respErr('目录格式须为 /目录/子目录/')
+  }
   if (!Object.values(PodcastInputType).includes(type as PodcastInputType) ||
       ![Platform.Minimax, Platform.FishAudio, Platform.Gemini].includes(platform as Platform) || typeof voice_id_1 !== 'string' || !voice_id_1 ||
       typeof voice_id_2 !== 'string' || !voice_id_2) {
@@ -139,6 +144,7 @@ export async function POST(req: Request) {
     },
     status: TaskStatus.Pending,
     consumedCredits: 0,
+    folderPath: typeof folderPath === 'string' && folderPath ? folderPath : '/',
     createdAt: new Date(),
   }
 

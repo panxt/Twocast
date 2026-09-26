@@ -120,3 +120,54 @@ export async function readLocalUpload(location: string): Promise<Buffer> {
   if (!location.startsWith('local-upload:')) throw new Error('Not a local upload')
   return fs.readFile(path.join(process.cwd(), 'private', 'uploads', location.slice('local-upload:'.length)))
 }
+
+// ---------------------------------------------------------------------------
+// 节目封面：私有桶 podcast-covers；本地开发落到 public/assets/covers。
+// ---------------------------------------------------------------------------
+const COVER_BUCKET = 'podcast-covers'
+
+export async function storeCover(filename: string, bytes: Buffer, contentType: string): Promise<string> {
+  if (process.env.NODE_ENV !== 'production' && !process.env.SUPABASE_URL) {
+    const dir = path.join(process.cwd(), 'public', 'assets', 'covers')
+    await fs.mkdir(dir, { recursive: true })
+    await fs.writeFile(path.join(dir, filename), bytes)
+    return `/assets/covers/${filename}`
+  }
+  const { url, key } = storageConfig()
+  const response = await fetch(`${url}/storage/v1/object/${COVER_BUCKET}/${encodeURIComponent(filename)}`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${key}`, apikey: key, 'content-type': contentType, 'x-upsert': 'true' },
+    body: new Uint8Array(bytes),
+  })
+  if (!response.ok) throw new Error(`Cover upload failed (${response.status}): ${(await response.text()).slice(0, 200)}`)
+  return `supabase-cover:${filename}`
+}
+
+export async function getCoverUrl(location: string): Promise<string> {
+  if (!location.startsWith('supabase-cover:')) return location
+  const { url, key } = storageConfig()
+  const filename = location.slice('supabase-cover:'.length)
+  const response = await fetch(`${url}/storage/v1/object/sign/${COVER_BUCKET}/${encodeURIComponent(filename)}`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${key}`, apikey: key, 'content-type': 'application/json' },
+    body: JSON.stringify({ expiresIn: 24 * 60 * 60 }),
+  })
+  if (!response.ok) throw new Error(`Cover URL signing failed (${response.status})`)
+  const data = await response.json()
+  return data.signedURL.startsWith('http') ? data.signedURL : new URL(`/storage/v1${data.signedURL}`, url).toString()
+}
+
+export async function removeCover(location: string): Promise<void> {
+  if (location.startsWith('/assets/covers/')) {
+    await fs.rm(path.join(process.cwd(), 'public', location), { force: true })
+    return
+  }
+  if (!location.startsWith('supabase-cover:')) return
+  const { url, key } = storageConfig()
+  const response = await fetch(`${url}/storage/v1/object/${COVER_BUCKET}`, {
+    method: 'DELETE',
+    headers: { authorization: `Bearer ${key}`, apikey: key, 'content-type': 'application/json' },
+    body: JSON.stringify({ prefixes: [location.slice('supabase-cover:'.length)] }),
+  })
+  if (!response.ok) throw new Error(`Cover cleanup failed (${response.status})`)
+}

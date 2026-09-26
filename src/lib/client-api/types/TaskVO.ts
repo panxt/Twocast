@@ -11,6 +11,7 @@ export interface TaskVO {
   folder_path?: string;
   labels?: string[];
   visibility?: 'private' | 'team';
+  cover_url?: string | null;
   error?: string | null;
   action?: string | null;
   llm_name?: string | null;

@@ -25,6 +25,8 @@ enum SelectType {
 
 interface UserInputProps {
   onSubmitSuccess?: () => void;
+  folderPath?: string;
+  extraFields?: React.ReactNode;
 }
 
 const tabIcons: Record<PodcastInputType, React.ComponentType<{ className?: string }>> = {
@@ -35,7 +37,7 @@ const tabIcons: Record<PodcastInputType, React.ComponentType<{ className?: strin
   [PodcastInputType.FrontPage]: Newspaper,
 };
 
-export function UserInput({ onSubmitSuccess }: UserInputProps) {
+export function UserInput({ onSubmitSuccess, folderPath, extraFields }: UserInputProps) {
   const locale = (useParams()?.locale || 'zh') as LocaleTypes;
   const { t, i18n } = useTranslation(locale, 'podcast');
   const [drafts, setDrafts] = useState<Partial<Record<PodcastInputType, string>>>({});
@@ -220,6 +222,7 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
       formData.append("voice_id_1", voiceId_1);
       formData.append("voice_id_2", voiceId_2);
       formData.append("language", outputLanguage);
+      if (folderPath && folderPath !== "/") formData.append("folder_path", folderPath);
       if (activeTab == PodcastInputType.File) {
         formData.append("file", file as File);
       } else {
@@ -377,6 +380,8 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
         </div>
       </div>
 
+      {extraFields}
+
       {/* 提交 */}
       <div className="flex flex-col-reverse items-stretch gap-3 pt-1 sm:flex-row sm:items-center sm:justify-between">
         {platformTips[platform as Platform] ? (
@@ -401,7 +406,7 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
           aria-valuenow={uploadPercent ?? undefined} className="mt-2 h-1.5 overflow-hidden rounded-full bg-voice-rail">
           <div className="h-full rounded-full bg-voice transition-[width]" style={{ width: `${uploadPercent ?? 0}%` }} />
         </div>}
-        <p className="mt-1 text-xs opacity-80">创建后可在右侧节目库看到生成进度。</p>
+        <p className="mt-1 text-xs opacity-80">创建后可在节目库看到生成进度。</p>
       </div>}
     </div>
   );

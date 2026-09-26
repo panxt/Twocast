@@ -12,7 +12,8 @@ const options = [
   { id: 'system', label: '跟随系统', Icon: Monitor },
 ] as const
 
-const ThemeSwitch = () => {
+// compact：侧栏底部的小号无边框版本；菜单向上弹出。
+const ThemeSwitch = ({ compact = false }: { compact?: boolean }) => {
   const { theme, setTheme, mounted } = useTheme()
   const [systemDark, setSystemDark] = React.useState(false)
 
@@ -28,9 +29,9 @@ const ThemeSwitch = () => {
   const CurrentIcon = mounted && isDark ? Moon : Sun
 
   return (
-    <Menu as="div" className="relative ml-1">
-      <Menu.Button aria-label="切换外观主题" className="ys-icon-btn border border-rule bg-sheet">
-        <CurrentIcon className="h-[18px] w-[18px]" aria-hidden="true" />
+    <Menu as="div" className={`relative ${compact ? '' : 'ml-1'}`}>
+      <Menu.Button aria-label="切换外观主题" className={`ys-icon-btn ${compact ? 'h-8 w-8 rounded-lg' : 'border border-rule bg-sheet'}`}>
+        <CurrentIcon className={compact ? 'h-4 w-4' : 'h-[18px] w-[18px]'} aria-hidden="true" />
       </Menu.Button>
       <Transition
         as={Fragment}
@@ -41,7 +42,7 @@ const ThemeSwitch = () => {
         leaveFrom="opacity-100 translate-y-0"
         leaveTo="opacity-0 -translate-y-1"
       >
-        <Menu.Items className="ys-sheet absolute right-0 z-50 mt-2 w-36 origin-top-right p-1 shadow-bar focus:outline-none">
+        <Menu.Items className={`ys-sheet absolute right-0 z-50 w-36 p-1 shadow-bar focus:outline-none ${compact ? 'bottom-full mb-2 origin-bottom-right' : 'mt-2 origin-top-right'}`}>
           {options.map(({ id, label, Icon }) => (
             <Menu.Item key={id}>
               {({ active }) => (
