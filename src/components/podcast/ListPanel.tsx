@@ -225,7 +225,7 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true, initi
       </select>
     </div>
 
-    <ul className="ys-sheet divide-y divide-rule overflow-hidden">
+    <ul className="ys-sheet divide-y divide-rule">
       {!showingCurrent && !currentError && <li role="status" className="flex items-center justify-center gap-2 py-12 text-sm text-ink-soft">
         <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />正在加载当前筛选结果…
       </li>}
@@ -244,7 +244,7 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true, initi
         const playing = current && (isPlaying || isLoading)
         const canManage = isAdmin || task.user_id === viewerId
         const percent = progressPercent(task)
-        return <li key={task.uuid} className={`px-4 py-4 sm:px-5 ${running ? 'bg-sheet-raised' : ''}`}>
+        return <li key={task.uuid} className={`px-4 py-4 first:rounded-t-2xl last:rounded-b-2xl sm:px-5 ${running ? 'bg-sheet-raised' : ''}`}>
           <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] gap-x-3 gap-y-2 sm:grid-cols-[2.75rem_minmax(0,1fr)_auto] sm:gap-x-4">
             {running
               ? <span aria-hidden="true" className="grid h-11 w-11 place-items-center rounded-full border-2 border-voice-rail text-voice">
@@ -298,7 +298,7 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true, initi
                 </Menu.Button>
                 <Transition as={Fragment} enter="transition ease-out duration-100" enterFrom="opacity-0 -translate-y-1" enterTo="opacity-100 translate-y-0"
                   leave="transition ease-in duration-75" leaveFrom="opacity-100" leaveTo="opacity-0">
-                  <Menu.Items className="ys-sheet absolute right-0 z-30 mt-1.5 w-44 origin-top-right p-1 shadow-bar focus:outline-none">
+                  <Menu.Items className="ys-sheet absolute right-0 z-40 mt-1.5 w-44 origin-top-right p-1 shadow-bar focus:outline-none">
                     <Menu.Item disabled={task.visibility !== 'team' && task.status !== TaskStatus.Success}>
                       {({ active }) => <button type="button" onClick={() => toggleSharing(task)} className={menuItemClass(active)}>
                         {task.visibility === 'team' ? '设为仅自己可见' : '共享给团队'}
