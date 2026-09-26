@@ -2,7 +2,9 @@
 
 import { Download, FileText, Folder, LoaderCircle, Lock, Pause, Play, Users } from 'lucide-react';
 import { useAudioPlayer } from '@/contexts/AudioPlayerContext';
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from '@/i18n/client';
+import { useParams } from 'next/navigation';
+import type { LocaleTypes } from '@/i18n/settings';
 import { formatTime } from '@/utils/time';
 
 interface PodcastPlayerProps {
@@ -31,7 +33,8 @@ const folderLabel = (path?: string) => {
 export default function PodcastPlayer({ trackId, audioUrl, downloadUrl, title, artist, thumbnail, duration, lyricsUrl, bundleUrl,
   ownerName, folderPath, visibility, createdAt, fileUrl, fileName }: PodcastPlayerProps) {
   const { play, pause, resume, seek, currentTrack, isPlaying, isLoading, currentTime, duration: liveDuration } = useAudioPlayer();
-  const { t } = useTranslation('podcast');
+  const locale = (useParams()?.locale || 'zh') as LocaleTypes;
+  const { t } = useTranslation(locale, 'podcast');
 
   // 检查是否是当前正在播放的音频
   const isCurrentTrack = currentTrack?.id === trackId;
@@ -80,7 +83,7 @@ export default function PodcastPlayer({ trackId, audioUrl, downloadUrl, title, a
         <h1 className="ys-title text-2xl leading-snug sm:text-[30px]">{title}</h1>
         <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1 text-xs text-ink-soft">
           {total > 0 && <span className="font-semibold tabular-nums text-ink">{formatTime(total)}</span>}
-          {folderPath !== undefined && <span className="inline-flex items-center gap-1"><Folder className="h-3.5 w-3.5" aria-hidden="true" />{folderLabel(folderPath)}</span>}
+          {folderPath && folderPath !== '/' && <span className="inline-flex items-center gap-1"><Folder className="h-3.5 w-3.5" aria-hidden="true" />{folderLabel(folderPath)}</span>}
           {visibility === 'team'
             ? <span className="inline-flex items-center gap-1 text-voice"><Users className="h-3.5 w-3.5" aria-hidden="true" />团队共享</span>
             : visibility === 'private' ? <span className="inline-flex items-center gap-1"><Lock className="h-3.5 w-3.5" aria-hidden="true" />仅自己可见</span> : null}

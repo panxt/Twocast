@@ -3,7 +3,9 @@
 import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { ScriptItem } from '@/lib/podcast/types';
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from '@/i18n/client';
+import { useParams } from 'next/navigation';
+import type { LocaleTypes } from '@/i18n/settings';
 import { useAudioPlayer } from '@/contexts/AudioPlayerContext';
 
 interface PodcastTabsProps {
@@ -18,7 +20,8 @@ const stamp = (ms: number) => `${Math.floor(ms / 60000)}:${String(Math.floor(ms 
 
 export default function PodcastTabs({ outline, keyPoints, scripts, timedScript, trackId }: PodcastTabsProps) {
   const [activeTab, setActiveTab] = useState<'outline' | 'scripts'>(timedScript?.length ? 'scripts' : 'outline');
-  const { t } = useTranslation('podcast');
+  const locale = (useParams()?.locale || 'zh') as LocaleTypes;
+  const { t } = useTranslation(locale, 'podcast');
   const { currentTime, seek, currentTrack } = useAudioPlayer();
   const isCurrentTrack = currentTrack?.id === trackId;
   const activeLine = isCurrentTrack ? (timedScript?.findLastIndex(line => line.startMs <= currentTime * 1000) ?? -1) : -1;

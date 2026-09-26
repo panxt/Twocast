@@ -9,7 +9,7 @@ import { languages as minimaxLng } from "@/lib/podcast/languages/minimax";
 import { languages as geminiLng } from "@/lib/podcast/languages/gemini";
 import { languages as fishAudioLng } from "@/lib/podcast/languages/fish_audio";
 import { CustomTextarea } from "./CustomTextarea";
-import { useTranslation } from "react-i18next";
+import { useTranslation } from "@/i18n/client";
 import { VoicePlayerButton } from "./VoicePlayerButton";
 import { getPlatformDefaultVoices } from "@/lib/podcast/client_utils";
 import Link from 'next/link';
@@ -36,8 +36,8 @@ const tabIcons: Record<PodcastInputType, React.ComponentType<{ className?: strin
 };
 
 export function UserInput({ onSubmitSuccess }: UserInputProps) {
-  const { t, i18n } = useTranslation('podcast');
   const locale = (useParams()?.locale || 'zh') as LocaleTypes;
+  const { t, i18n } = useTranslation(locale, 'podcast');
   const [drafts, setDrafts] = useState<Partial<Record<PodcastInputType, string>>>({});
   const [activeTab, setActiveTab] = useState(PodcastInputType.Topic);
   const topic = drafts[activeTab] || '';
@@ -319,7 +319,7 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
   return (
     <div className="flex flex-col gap-5">
       {/* 资料来源 */}
-      <div role="tablist" aria-label="资料来源" className="ys-seg grid-cols-4 sm:flex">
+      <div role="tablist" aria-label="资料来源" className="ys-seg" style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}>
         {tabs.map((tab) => {
           const Icon = tabIcons[tab.id];
           const active = activeTab === tab.id;
@@ -330,7 +330,7 @@ export function UserInput({ onSubmitSuccess }: UserInputProps) {
               role="tab"
               aria-selected={active}
               onClick={() => handleTabChange(tab.id)}
-              className={`ys-seg-item flex-1 ${active ? 'ys-seg-item-active' : ''}`}
+              className={`ys-seg-item min-w-0 px-2 ${active ? 'ys-seg-item-active' : ''}`}
               disabled={loading}
             >
               <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />

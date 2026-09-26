@@ -3,13 +3,14 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { toast } from 'sonner'
-import { useTranslation } from 'react-i18next'
+import { useParams } from 'next/navigation'
 import { Menu, Transition } from '@headlessui/react'
 import { Check, Ellipsis, FileText, Folder, LoaderCircle, Lock, Pause, Play, Search, TriangleAlert, Users } from 'lucide-react'
 import { useAudioPlayer } from '@/contexts/AudioPlayerContext'
 import { TaskVO } from '@/lib/client-api/types/TaskVO'
 import { TaskStatus } from '@/types/task'
 import { getLocalePath } from '@/utils/locale-util'
+import type { LocaleTypes } from '@/i18n/settings'
 import { formatTime } from '@/utils/time'
 import type { EpisodeListData } from '@/lib/podcast/list'
 import { RouteProgress } from './RouteProgress'
@@ -42,7 +43,7 @@ const dateLabel = (value?: Date | string | null) => {
 }
 
 export function ListPanel({ refreshTrigger, apiUrl, showPagination = true, initialList }: ListPanelProps) {
-  const { i18n } = useTranslation()
+  const locale = (useParams()?.locale || 'zh') as LocaleTypes
   const { play, pause, resume, isPlaying, isLoading, currentTrack } = useAudioPlayer()
   const [items, setItems] = useState<TaskVO[]>(initialList?.items || [])
   const [page, setPage] = useState(1)
@@ -261,10 +262,10 @@ export function ListPanel({ refreshTrigger, apiUrl, showPagination = true, initi
 
             <div className="min-w-0 flex flex-col gap-1">
               {task.result?.audio_url
-                ? <Link href={getLocalePath(i18n.language, `/podcast/${task.uuid}`)} className="truncate text-[15px] font-semibold text-ink hover:text-brand">{titleOf(task)}</Link>
+                ? <Link href={getLocalePath(locale, `/podcast/${task.uuid}`)} className="truncate text-[15px] font-semibold text-ink hover:text-brand">{titleOf(task)}</Link>
                 : <span className="truncate text-[15px] font-semibold text-ink">{titleOf(task)}</span>}
               {!running && !failed && <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-soft">
-                <span className="inline-flex items-center gap-1"><Folder className="h-3.5 w-3.5" aria-hidden="true" />{folderLabel(task.folder_path)}</span>
+                {task.folder_path && task.folder_path !== '/' && <span className="inline-flex items-center gap-1"><Folder className="h-3.5 w-3.5" aria-hidden="true" />{folderLabel(task.folder_path)}</span>}
                 {task.visibility === 'team'
                   ? <span className="inline-flex items-center gap-1 text-voice"><Users className="h-3.5 w-3.5" aria-hidden="true" />团队共享</span>
                   : <span className="inline-flex items-center gap-1"><Lock className="h-3.5 w-3.5" aria-hidden="true" />仅自己可见</span>}
