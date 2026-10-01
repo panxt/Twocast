@@ -6,6 +6,7 @@ import { taskGetStepItem } from '@/lib/podcast/task'
 import { PodcastStep, type AudioOutput } from '@/lib/podcast/types'
 import { readAudio } from '@/lib/podcast/storage'
 import { safeAudioBasename } from '@/lib/podcast/filename'
+import { toSrt } from '@/lib/podcast/subtitles'
 import { toLrc } from '@/lib/podcast/lyrics'
 import { buildStoredZip } from '@/lib/zip'
 import { LongTextResult } from '@/queue/types'
@@ -18,7 +19,8 @@ export async function GET(_: Request, context: { params: Promise<{ uuid: string 
   const user = await getCurrentUser()
   if (!user.userEmail) return NextResponse.json({ error: '请先登录' }, { status: 401 })
   const task = await getTaskByUuid((await context.params).uuid)
-  if (!task || !canReadTask(task, user)) return NextResponse.json({ error: '音频不存在' }, { status: 404 })
+  if (!task || !canReadTask(task, user))
+    return NextResponse.json({ error: '音频不存在' }, { status: 404 })
   const audioStep = taskGetStepItem(task, PodcastStep.Audio)
   const audio = audioStep.output as AudioOutput | undefined
   if (!audio?.location) return NextResponse.json({ error: '音频尚未生成' }, { status: 404 })
@@ -33,6 +35,10 @@ export async function GET(_: Request, context: { params: Promise<{ uuid: string 
   const mp3 = await readAudio(audio.location.slice('supabase:'.length))
   const zip = buildStoredZip([
     { name: `${basename}.mp3`, data: mp3 },
+    {
+      name: `${basename}.srt`,
+      data: Buffer.from(toSrt(audio.timedScript, audio.duration), 'utf8'),
+    },
     { name: `${basename}.lrc`, data: Buffer.from(toLrc(audio.timedScript, title), 'utf8') },
   ])
   // Vercel limits buffered Function responses to 4.5 MB. Stream the archive so
@@ -40,7 +46,10 @@ export async function GET(_: Request, context: { params: Promise<{ uuid: string 
   let offset = 0
   const body = new ReadableStream<Uint8Array>({
     pull(controller) {
-      if (offset >= zip.length) { controller.close(); return }
+      if (offset >= zip.length) {
+        controller.close()
+        return
+      }
       const end = Math.min(offset + 64 * 1024, zip.length)
       controller.enqueue(new Uint8Array(zip.subarray(offset, end)))
       offset = end

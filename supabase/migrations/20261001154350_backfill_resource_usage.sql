@@ -1,0 +1,2 @@
+UPDATE public.tasks t SET audio_bytes=(o.metadata->>'size')::bigint FROM storage.objects o WHERE o.bucket_id='podcast-audio' AND o.name=substring(t.steps_detail::jsonb #>> '{audio,output,location}' from 10);
+UPDATE public.quota_reservations q SET bytes=(o.metadata->>'size')::bigint FROM public.tasks t, storage.objects o WHERE t.uuid=q.uuid AND o.bucket_id='podcast-files' AND o.name=substring(t.user_inputs::jsonb ->> 'fileLocation' from 17);

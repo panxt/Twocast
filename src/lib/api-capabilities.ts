@@ -1,20 +1,26 @@
 import { Platform } from './podcast/types'
 
 export const TTS_CAPABILITIES = {
+  [Platform.ElevenLabs]: 'tts:elevenlabs',
   [Platform.Minimax]: 'tts:minimaxi',
   [Platform.FishAudio]: 'tts:fish_audio',
   [Platform.Gemini]: 'tts:gemini',
 } as const
 
-export type TtsCapability = typeof TTS_CAPABILITIES[Platform]
+export type TtsCapability = (typeof TTS_CAPABILITIES)[Platform]
 export type ShareCapability = 'llm' | TtsCapability
 
 export const SHARE_CAPABILITIES: readonly ShareCapability[] = [
-  'llm', 'tts:minimaxi', 'tts:fish_audio', 'tts:gemini',
+  'llm',
+  'tts:elevenlabs',
+  'tts:minimaxi',
+  'tts:fish_audio',
+  'tts:gemini',
 ]
 
 export const CAPABILITY_LABELS: Record<ShareCapability, string> = {
   llm: '大模型',
+  'tts:elevenlabs': 'ElevenLabs 语音',
   'tts:minimaxi': 'MiniMax 语音',
   'tts:fish_audio': 'Fish Audio 语音',
   'tts:gemini': 'Gemini 语音',

@@ -1,12 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import { getDb } from '@/db/db'
-import { tasksTable } from '@/db/schema'
+import { tasksTable, teamsTable } from '@/db/schema'
 import { getCurrentUser } from '@/utils/user'
 import { TaskStatus } from '@/types/task'
-import { PodcastStep, TaskUserInput } from '@/lib/podcast/types'
-import { taskGetStepItem } from '@/lib/podcast/task'
-import { removeAudio, removeCover, removeUpload } from '@/lib/podcast/storage'
 import { isValidFolderPath } from '@/lib/podcast/folder'
 import { canManageTask } from '@/lib/podcast/access'
 
@@ -21,15 +18,10 @@ export async function DELETE(_: NextRequest, context: { params: Promise<{ uuid: 
   if (task.status === TaskStatus.Pending || task.status === TaskStatus.Processing) {
     return NextResponse.json({ error: '生成中的任务暂不能删除，请等待完成' }, { status: 409 })
   }
-  const audioOutput = taskGetStepItem(task, PodcastStep.Audio)?.output
-  const audioFiles = [...new Set([audioOutput?.location, audioOutput?.backupLocation, ...(audioOutput?.backupLocations || [])])]
-    .filter((location): location is string => typeof location === 'string' && location.startsWith('supabase:'))
-    .map(location => location.slice('supabase:'.length))
-  if (audioFiles.length) await removeAudio(audioFiles)
-  const upload = (task.userInputs as TaskUserInput)?.fileLocation
-  if (upload) await removeUpload(upload)
-  if (task.coverLocation) await removeCover(task.coverLocation).catch(() => undefined)
-  await getDb().delete(tasksTable).where(and(eq(tasksTable.id, task.id), eq(tasksTable.status, task.status)))
+  await getDb()
+    .update(tasksTable)
+    .set({ deletedAt: new Date(), updatedAt: new Date() })
+    .where(and(eq(tasksTable.id, task.id), eq(tasksTable.status, task.status)))
   return NextResponse.json({ ok: true })
 }
 
@@ -45,6 +37,25 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ u
   const folderPath = body?.folderPath ?? task.folderPath
   const labels = body?.labels ?? task.labels
   const visibility = body?.visibility ?? task.visibility
+  const sharedTeamIds = body?.sharedTeamIds ?? (visibility === 'team' ? task.sharedTeamIds : [])
+  if (
+    !Array.isArray(sharedTeamIds) ||
+    sharedTeamIds.length > 30 ||
+    sharedTeamIds.some(
+      (id) => !Number.isInteger(id) || id < 1 || (!user.isAdmin && !user.teamIds.includes(id))
+    )
+  )
+    return NextResponse.json({ error: '请选择自己所属的团队' }, { status: 400 })
+  if (visibility === 'team' && !sharedTeamIds.length)
+    return NextResponse.json({ error: '请选择至少一个共享团队' }, { status: 400 })
+  if (sharedTeamIds.length) {
+    const valid = await getDb()
+      .select({ id: teamsTable.id })
+      .from(teamsTable)
+      .where(and(inArray(teamsTable.id, sharedTeamIds), eq(teamsTable.active, true)))
+    if (valid.length !== new Set(sharedTeamIds).size)
+      return NextResponse.json({ error: '团队不存在或已停用' }, { status: 400 })
+  }
   if (visibility !== 'private' && visibility !== 'team') {
     return NextResponse.json({ error: '共享范围无效' }, { status: 400 })
   }
@@ -54,9 +65,22 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ u
   if (!isValidFolderPath(folderPath)) {
     return NextResponse.json({ error: '目录格式须为 /目录/子目录/' }, { status: 400 })
   }
-  if (!Array.isArray(labels) || labels.length > 8 || labels.some(label => typeof label !== 'string' || !label.trim() || label.length > 24)) {
+  if (
+    !Array.isArray(labels) ||
+    labels.length > 8 ||
+    labels.some((label) => typeof label !== 'string' || !label.trim() || label.length > 24)
+  ) {
     return NextResponse.json({ error: '最多设置 8 个标签，每个不超过 24 字' }, { status: 400 })
   }
-  await getDb().update(tasksTable).set({ folderPath, labels, visibility, updatedAt: new Date() }).where(eq(tasksTable.id, task.id))
+  await getDb()
+    .update(tasksTable)
+    .set({
+      folderPath,
+      labels,
+      visibility,
+      sharedTeamIds: visibility === 'team' ? [...new Set(sharedTeamIds)] : [],
+      updatedAt: new Date(),
+    })
+    .where(eq(tasksTable.id, task.id))
   return NextResponse.json({ ok: true })
 }

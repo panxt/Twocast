@@ -1,16 +1,16 @@
 export type AudioOutput = {
-  location: string;
-  duration: number;
-  timedScript?: { role: string; text: string; startMs: number }[];
-  backupLocation?: string;
-  backupLocations?: string[];
+  location: string
+  duration: number
+  timedScript?: { role: string; text: string; startMs: number }[]
+  backupLocation?: string
+  backupLocations?: string[]
 }
 
 export interface AudioResult {
-  audio: Buffer;
-  format: string;
-  duration?: number;
-  timedScript?: { role: string; text: string; startMs: number }[];
+  audio: Buffer
+  format: string
+  duration?: number
+  timedScript?: { role: string; text: string; startMs: number }[]
 }
 
 export enum PodcastInputType {
@@ -32,7 +32,10 @@ export type TaskUserInput = {
   language?: string
   fileName?: string
   fileLocation?: string
-  apiAccess?: { llm: 'own' | 'member' | 'grant' | 'admin'; tts: 'own' | 'member' | 'grant' | 'admin' }
+  apiAccess?: {
+    llm: 'own' | 'member' | 'grant' | 'admin'
+    tts: 'own' | 'member' | 'grant' | 'admin'
+  }
   apiKeyOwners?: { llm?: number; tts?: number }
   apiKeyShareIds?: { llm?: number; tts?: number }
   reservedGrantIds?: number[]
@@ -59,6 +62,7 @@ export type StepsDetailItem = {
 }
 
 export enum Platform {
+  ElevenLabs = 'elevenlabs',
   Minimax = 'minimaxi',
   Gemini = 'gemini',
   FishAudio = 'fish_audio',

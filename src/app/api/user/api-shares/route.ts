@@ -1,13 +1,14 @@
-import { and, desc, eq, gt, or } from 'drizzle-orm'
+import { and, desc, eq, gt, or, inArray } from 'drizzle-orm'
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/db/db'
-import { memberApiSharesTable, sessionsTable } from '@/db/schema'
+import { memberApiSharesTable, sessionsTable, teamMembersTable, teamsTable } from '@/db/schema'
 import { getCurrentUser } from '@/utils/user'
 import { getUserSettings, SettingKey } from '@/lib/settings'
 import { getShareChain } from '@/lib/member-share-chain'
 import { isShareCapability, ShareCapability } from '@/lib/api-capabilities'
 
 const requiredKeys: Record<ShareCapability, SettingKey[]> = {
+  'tts:elevenlabs': ['ELEVENLABS_API_KEY'],
   llm: ['LLM_CHAT_URL', 'LLM_CHAT_MODEL', 'LLM_API_KEY'],
   'tts:minimaxi': ['MINIMAX_GROUP_ID', 'MINIMAX_TOKEN'],
   'tts:fish_audio': ['FISH_AUDIO_TOKEN'],
@@ -18,55 +19,133 @@ export async function GET() {
   const user = await getCurrentUser()
   if (!user.userEmail) return NextResponse.json({ error: '请先登录' }, { status: 401 })
   const db = getDb()
-  const users = await db.select({ id: sessionsTable.id, displayName: sessionsTable.displayName })
-    .from(sessionsTable).where(and(eq(sessionsTable.role, 'member'), gt(sessionsTable.expiresAt, new Date())))
-  const shares = await db.select().from(memberApiSharesTable)
-    .where(user.isAdmin ? undefined : or(eq(memberApiSharesTable.ownerUserId, user.userId),
-      eq(memberApiSharesTable.delegatedByUserId, user.userId), eq(memberApiSharesTable.recipientUserId, user.userId)))
+  const peers = user.isAdmin
+    ? []
+    : await db
+        .select({ userId: teamMembersTable.userId })
+        .from(teamMembersTable)
+        .where(inArray(teamMembersTable.teamId, user.teamIds.length ? user.teamIds : [-1]))
+  const users = await db
+    .select({ id: sessionsTable.id, displayName: sessionsTable.displayName })
+    .from(sessionsTable)
+    .where(
+      and(
+        gt(sessionsTable.expiresAt, new Date()),
+        user.isAdmin
+          ? undefined
+          : inArray(sessionsTable.id, peers.length ? peers.map((p) => p.userId) : [-1])
+      )
+    )
+  const shares = await db
+    .select()
+    .from(memberApiSharesTable)
+    .where(
+      user.isAdmin
+        ? undefined
+        : or(
+            eq(memberApiSharesTable.ownerUserId, user.userId),
+            eq(memberApiSharesTable.delegatedByUserId, user.userId),
+            eq(memberApiSharesTable.recipientUserId, user.userId)
+          )
+    )
     .orderBy(desc(memberApiSharesTable.createdAt))
   return NextResponse.json({ users, shares })
 }
 
 export async function POST(request: NextRequest) {
   const user = await getCurrentUser()
-  if (!user.userEmail || user.isAdmin) return NextResponse.json({ error: '只有受邀成员能分享私有 API' }, { status: 403 })
+  if (!user.userEmail)
+    return NextResponse.json({ error: '请先登录才能分享私有 API' }, { status: 403 })
   const input = await request.json().catch(() => null)
   const capability = input?.capability
   const recipientUserId = Number(input?.recipientUserId)
   const maxEpisodes = Number(input?.maxEpisodes)
   const parentShareId = input?.parentShareId == null ? null : Number(input.parentShareId)
-  if (!isShareCapability(capability) || !Number.isInteger(recipientUserId) || recipientUserId < 1 ||
-      recipientUserId === user.userId || !Number.isInteger(maxEpisodes) || maxEpisodes < 1 || maxEpisodes > 1000 ||
-      (parentShareId !== null && (!Number.isInteger(parentShareId) || parentShareId < 1))) {
+  if (
+    !isShareCapability(capability) ||
+    !Number.isInteger(recipientUserId) ||
+    recipientUserId < 1 ||
+    recipientUserId === user.userId ||
+    !Number.isInteger(maxEpisodes) ||
+    maxEpisodes < 1 ||
+    maxEpisodes > 1000 ||
+    (parentShareId !== null && (!Number.isInteger(parentShareId) || parentShareId < 1))
+  ) {
     return NextResponse.json({ error: '分享参数无效' }, { status: 400 })
   }
   const db = getDb()
-  const [recipient] = await db.select({ id: sessionsTable.id }).from(sessionsTable)
-    .where(and(eq(sessionsTable.id, recipientUserId), eq(sessionsTable.role, 'member'),
-      gt(sessionsTable.expiresAt, new Date()))).limit(1)
+  const [recipient] = await db
+    .select({ id: sessionsTable.id })
+    .from(sessionsTable)
+    .where(
+      and(
+        eq(sessionsTable.id, recipientUserId),
+
+        gt(sessionsTable.expiresAt, new Date())
+      )
+    )
+    .limit(1)
   if (!recipient) return NextResponse.json({ error: '接收成员不存在或已停用' }, { status: 404 })
+  const memberships = await db
+    .select({ teamId: teamMembersTable.teamId })
+    .from(teamMembersTable)
+    .innerJoin(teamsTable, eq(teamsTable.id, teamMembersTable.teamId))
+    .where(and(eq(teamMembersTable.userId, recipientUserId), eq(teamsTable.active, true)))
+  if (!memberships.some((t) => user.teamIds.includes(t.teamId)))
+    return NextResponse.json({ error: 'API 仅可分享给同团队成员' }, { status: 403 })
   let ownerUserId = user.userId
   if (parentShareId !== null) {
     const chain = await getShareChain(parentShareId)
     const parent = chain?.[0]
-    if (!parent || parent.recipientUserId !== user.userId || !parent.allowReshare ||
-        parent.capability !== capability || chain!.length >= 16 || parent.ownerUserId === recipientUserId) {
-      return NextResponse.json({ error: '原持有人未授权转分享，或上游分享已停用/用完' }, { status: 403 })
+    if (
+      !parent ||
+      parent.recipientUserId !== user.userId ||
+      !parent.allowReshare ||
+      parent.capability !== capability ||
+      chain!.length >= 16 ||
+      parent.ownerUserId === recipientUserId
+    ) {
+      return NextResponse.json(
+        { error: '原持有人未授权转分享，或上游分享已停用/用完' },
+        { status: 403 }
+      )
     }
     ownerUserId = parent.ownerUserId
   }
-  const [owner] = await db.select({ id: sessionsTable.id }).from(sessionsTable)
-    .where(and(eq(sessionsTable.id, ownerUserId), eq(sessionsTable.role, 'member'),
-      gt(sessionsTable.expiresAt, new Date()))).limit(1)
+  const ownerTeams = await db
+    .select({ teamId: teamMembersTable.teamId })
+    .from(teamMembersTable)
+    .where(eq(teamMembersTable.userId, ownerUserId))
+  if (!memberships.some((t) => ownerTeams.some((o) => o.teamId === t.teamId)))
+    return NextResponse.json({ error: '接收者须与原 Key 持有人同属团队' }, { status: 403 })
+  const [owner] = await db
+    .select({ id: sessionsTable.id })
+    .from(sessionsTable)
+    .where(
+      and(
+        eq(sessionsTable.id, ownerUserId),
+
+        gt(sessionsTable.expiresAt, new Date())
+      )
+    )
+    .limit(1)
   if (!owner) return NextResponse.json({ error: '原 Key 持有人已失效' }, { status: 403 })
   const toggle = capability === 'llm' ? 'API_LLM_ENABLED' : 'API_TTS_ENABLED'
   const values = await getUserSettings(ownerUserId, [...requiredKeys[capability], toggle])
-  if (values[toggle] === '0' || !requiredKeys[capability].every(key => Boolean(values[key]))) {
+  if (values[toggle] === '0' || !requiredKeys[capability].every((key) => Boolean(values[key]))) {
     return NextResponse.json({ error: '原持有人尚未配置并启用对应 API' }, { status: 400 })
   }
-  const [share] = await db.insert(memberApiSharesTable).values({
-    ownerUserId, recipientUserId, delegatedByUserId: user.userId, parentShareId, capability, maxEpisodes,
-  }).returning({ id: memberApiSharesTable.id })
+  const [share] = await db
+    .insert(memberApiSharesTable)
+    .values({
+      ownerUserId,
+      recipientUserId,
+      delegatedByUserId: user.userId,
+      parentShareId,
+      capability,
+      maxEpisodes,
+    })
+    .returning({ id: memberApiSharesTable.id })
   return NextResponse.json({ share })
 }
 
@@ -76,24 +155,43 @@ export async function PATCH(request: NextRequest) {
   const input = await request.json().catch(() => null)
   const id = Number(input?.id)
   const maxEpisodes = Number(input?.maxEpisodes)
-  if (!Number.isInteger(id) || id < 1 || typeof input?.active !== 'boolean' ||
-      !Number.isInteger(maxEpisodes) || maxEpisodes < 1 || maxEpisodes > 1000) {
+  if (
+    !Number.isInteger(id) ||
+    id < 1 ||
+    typeof input?.active !== 'boolean' ||
+    !Number.isInteger(maxEpisodes) ||
+    maxEpisodes < 1 ||
+    maxEpisodes > 1000
+  ) {
     return NextResponse.json({ error: '分享参数无效' }, { status: 400 })
   }
   const db = getDb()
-  const [share] = await db.select().from(memberApiSharesTable).where(eq(memberApiSharesTable.id, id)).limit(1)
-  if (!share || (!user.isAdmin && share.ownerUserId !== user.userId && share.delegatedByUserId !== user.userId)) {
+  const [share] = await db
+    .select()
+    .from(memberApiSharesTable)
+    .where(eq(memberApiSharesTable.id, id))
+    .limit(1)
+  if (
+    !share ||
+    (!user.isAdmin && share.ownerUserId !== user.userId && share.delegatedByUserId !== user.userId)
+  ) {
     return NextResponse.json({ error: '分享不存在' }, { status: 404 })
   }
-  if (maxEpisodes < share.usedEpisodes) return NextResponse.json({ error: '总额度不能低于已使用次数' }, { status: 400 })
+  if (maxEpisodes < share.usedEpisodes)
+    return NextResponse.json({ error: '总额度不能低于已使用次数' }, { status: 400 })
   if (input.allowReshare !== undefined && typeof input.allowReshare !== 'boolean') {
     return NextResponse.json({ error: '转分享开关无效' }, { status: 400 })
   }
   if (input.allowReshare !== undefined && !user.isAdmin && share.ownerUserId !== user.userId) {
     return NextResponse.json({ error: '只有原 Key 持有人可以授权转分享' }, { status: 403 })
   }
-  await db.update(memberApiSharesTable).set({ active: input.active, maxEpisodes,
-    allowReshare: input.allowReshare ?? share.allowReshare })
+  await db
+    .update(memberApiSharesTable)
+    .set({
+      active: input.active,
+      maxEpisodes,
+      allowReshare: input.allowReshare ?? share.allowReshare,
+    })
     .where(eq(memberApiSharesTable.id, id))
   return NextResponse.json({ ok: true })
 }

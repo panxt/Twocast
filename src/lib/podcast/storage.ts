@@ -9,7 +9,8 @@ const UPLOAD_BUCKET = 'podcast-files'
 function storageConfig() {
   const url = process.env.SUPABASE_URL?.replace(/\/$/, '')
   const key = process.env.SUPABASE_SECRET_KEY
-  if (!url || !key) throw new Error('SUPABASE_URL and SUPABASE_SECRET_KEY are required for audio storage')
+  if (!url || !key)
+    throw new Error('SUPABASE_URL and SUPABASE_SECRET_KEY are required for audio storage')
   return { url, key }
 }
 
@@ -21,16 +22,28 @@ export async function storeAudio(filename: string, audio: Buffer): Promise<strin
     return `/assets/audio/${filename}`
   }
   const { url, key } = storageConfig()
-  const response = await fetch(`${url}/storage/v1/object/${BUCKET}/${encodeURIComponent(filename)}`, {
-    method: 'POST',
-    headers: { authorization: `Bearer ${key}`, apikey: key, 'content-type': 'audio/mpeg', 'x-upsert': 'true' },
-    body: new Uint8Array(audio),
-  })
+  const response = await fetch(
+    `${url}/storage/v1/object/${BUCKET}/${encodeURIComponent(filename)}`,
+    {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${key}`,
+        apikey: key,
+        'content-type': 'audio/mpeg',
+        'x-upsert': 'true',
+      },
+      body: new Uint8Array(audio),
+    }
+  )
   if (!response.ok) throw storageUploadError(response.status, await response.text(), '音频')
   return `supabase:${filename}`
 }
 
-export async function storeUpload(filename: string, bytes: Buffer, contentType: string): Promise<string> {
+export async function storeUpload(
+  filename: string,
+  bytes: Buffer,
+  contentType: string
+): Promise<string> {
   if (process.env.NODE_ENV !== 'production' && !process.env.SUPABASE_URL) {
     const dir = path.join(process.cwd(), 'private', 'uploads')
     await fs.mkdir(dir, { recursive: true })
@@ -38,11 +51,14 @@ export async function storeUpload(filename: string, bytes: Buffer, contentType: 
     return `local-upload:${filename}`
   }
   const { url, key } = storageConfig()
-  const response = await fetch(`${url}/storage/v1/object/${UPLOAD_BUCKET}/${encodeURIComponent(filename)}`, {
-    method: 'POST',
-    headers: { authorization: `Bearer ${key}`, apikey: key, 'content-type': contentType },
-    body: new Uint8Array(bytes),
-  })
+  const response = await fetch(
+    `${url}/storage/v1/object/${UPLOAD_BUCKET}/${encodeURIComponent(filename)}`,
+    {
+      method: 'POST',
+      headers: { authorization: `Bearer ${key}`, apikey: key, 'content-type': contentType },
+      body: new Uint8Array(bytes),
+    }
+  )
   if (!response.ok) throw storageUploadError(response.status, await response.text(), '原文件')
   return `supabase-upload:${filename}`
 }
@@ -51,11 +67,14 @@ export async function getAudioUrl(location: string, downloadName?: string): Prom
   if (!location?.startsWith('supabase:')) return location
   const { url, key } = storageConfig()
   const filename = location.slice('supabase:'.length)
-  const response = await fetch(`${url}/storage/v1/object/sign/${BUCKET}/${encodeURIComponent(filename)}`, {
-    method: 'POST',
-    headers: { authorization: `Bearer ${key}`, apikey: key, 'content-type': 'application/json' },
-    body: JSON.stringify({ expiresIn: 24 * 60 * 60 }),
-  })
+  const response = await fetch(
+    `${url}/storage/v1/object/sign/${BUCKET}/${encodeURIComponent(filename)}`,
+    {
+      method: 'POST',
+      headers: { authorization: `Bearer ${key}`, apikey: key, 'content-type': 'application/json' },
+      body: JSON.stringify({ expiresIn: 5 * 60 }),
+    }
+  )
   if (!response.ok) throw new Error(`Audio URL signing failed (${response.status})`)
   const data = await response.json()
   const signed = data.signedURL.startsWith('http')
@@ -69,9 +88,12 @@ export async function getAudioUrl(location: string, downloadName?: string): Prom
 
 export async function readAudio(filename: string): Promise<Buffer> {
   const { url, key } = storageConfig()
-  const response = await fetch(`${url}/storage/v1/object/authenticated/${BUCKET}/${encodeURIComponent(filename)}`, {
-    headers: { authorization: `Bearer ${key}`, apikey: key },
-  })
+  const response = await fetch(
+    `${url}/storage/v1/object/authenticated/${BUCKET}/${encodeURIComponent(filename)}`,
+    {
+      headers: { authorization: `Bearer ${key}`, apikey: key },
+    }
+  )
   if (!response.ok) throw new Error(`Audio download failed (${response.status})`)
   return Buffer.from(await response.arrayBuffer())
 }
@@ -106,20 +128,29 @@ export async function getUploadUrl(location: string, downloadName: string): Prom
   if (!location.startsWith('supabase-upload:')) throw new Error('This upload is stored locally')
   const { url, key } = storageConfig()
   const filename = location.slice('supabase-upload:'.length)
-  const response = await fetch(`${url}/storage/v1/object/sign/${UPLOAD_BUCKET}/${encodeURIComponent(filename)}`, {
-    method: 'POST', headers: { authorization: `Bearer ${key}`, apikey: key, 'content-type': 'application/json' },
-    body: JSON.stringify({ expiresIn: 60 * 60 }),
-  })
+  const response = await fetch(
+    `${url}/storage/v1/object/sign/${UPLOAD_BUCKET}/${encodeURIComponent(filename)}`,
+    {
+      method: 'POST',
+      headers: { authorization: `Bearer ${key}`, apikey: key, 'content-type': 'application/json' },
+      body: JSON.stringify({ expiresIn: 5 * 60 }),
+    }
+  )
   if (!response.ok) throw new Error(`File signing failed (${response.status})`)
   const data = await response.json()
-  const signed = new URL(data.signedURL.startsWith('http') ? data.signedURL : `/storage/v1${data.signedURL}`, url)
+  const signed = new URL(
+    data.signedURL.startsWith('http') ? data.signedURL : `/storage/v1${data.signedURL}`,
+    url
+  )
   signed.searchParams.set('download', downloadName.replace(/[\\/:*?"<>|\r\n]/g, ' ').slice(0, 100))
   return signed.toString()
 }
 
 export async function readLocalUpload(location: string): Promise<Buffer> {
   if (!location.startsWith('local-upload:')) throw new Error('Not a local upload')
-  return fs.readFile(path.join(process.cwd(), 'private', 'uploads', location.slice('local-upload:'.length)))
+  return fs.readFile(
+    path.join(process.cwd(), 'private', 'uploads', location.slice('local-upload:'.length))
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -127,7 +158,11 @@ export async function readLocalUpload(location: string): Promise<Buffer> {
 // ---------------------------------------------------------------------------
 const COVER_BUCKET = 'podcast-covers'
 
-export async function storeCover(filename: string, bytes: Buffer, contentType: string): Promise<string> {
+export async function storeCover(
+  filename: string,
+  bytes: Buffer,
+  contentType: string
+): Promise<string> {
   if (process.env.NODE_ENV !== 'production' && !process.env.SUPABASE_URL) {
     const dir = path.join(process.cwd(), 'public', 'assets', 'covers')
     await fs.mkdir(dir, { recursive: true })
@@ -135,11 +170,19 @@ export async function storeCover(filename: string, bytes: Buffer, contentType: s
     return `/assets/covers/${filename}`
   }
   const { url, key } = storageConfig()
-  const response = await fetch(`${url}/storage/v1/object/${COVER_BUCKET}/${encodeURIComponent(filename)}`, {
-    method: 'POST',
-    headers: { authorization: `Bearer ${key}`, apikey: key, 'content-type': contentType, 'x-upsert': 'true' },
-    body: new Uint8Array(bytes),
-  })
+  const response = await fetch(
+    `${url}/storage/v1/object/${COVER_BUCKET}/${encodeURIComponent(filename)}`,
+    {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${key}`,
+        apikey: key,
+        'content-type': contentType,
+        'x-upsert': 'true',
+      },
+      body: new Uint8Array(bytes),
+    }
+  )
   if (!response.ok) throw storageUploadError(response.status, await response.text(), '封面')
   return `supabase-cover:${filename}`
 }
@@ -148,14 +191,19 @@ export async function getCoverUrl(location: string): Promise<string> {
   if (!location.startsWith('supabase-cover:')) return location
   const { url, key } = storageConfig()
   const filename = location.slice('supabase-cover:'.length)
-  const response = await fetch(`${url}/storage/v1/object/sign/${COVER_BUCKET}/${encodeURIComponent(filename)}`, {
-    method: 'POST',
-    headers: { authorization: `Bearer ${key}`, apikey: key, 'content-type': 'application/json' },
-    body: JSON.stringify({ expiresIn: 24 * 60 * 60 }),
-  })
+  const response = await fetch(
+    `${url}/storage/v1/object/sign/${COVER_BUCKET}/${encodeURIComponent(filename)}`,
+    {
+      method: 'POST',
+      headers: { authorization: `Bearer ${key}`, apikey: key, 'content-type': 'application/json' },
+      body: JSON.stringify({ expiresIn: 5 * 60 }),
+    }
+  )
   if (!response.ok) throw new Error(`Cover URL signing failed (${response.status})`)
   const data = await response.json()
-  return data.signedURL.startsWith('http') ? data.signedURL : new URL(`/storage/v1${data.signedURL}`, url).toString()
+  return data.signedURL.startsWith('http')
+    ? data.signedURL
+    : new URL(`/storage/v1${data.signedURL}`, url).toString()
 }
 
 export async function removeCover(location: string): Promise<void> {
