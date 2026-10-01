@@ -38,6 +38,7 @@ export type TaskUserInput = {
   }
   apiKeyOwners?: { llm?: number; tts?: number }
   apiKeyShareIds?: { llm?: number; tts?: number }
+  reservedApiOn?: string
   reservedGrantIds?: number[]
   reservedMemberShareIds?: number[]
 }

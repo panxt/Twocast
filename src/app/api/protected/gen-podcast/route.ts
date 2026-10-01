@@ -133,7 +133,11 @@ export async function POST(req: Request) {
         fileExtension === 'pdf' ? 'application/pdf' : 'text/plain'
       )
     } catch (error) {
-      await releaseApiGrants(reservation.grantIds, reservation.memberShareIds)
+      await releaseApiGrants(
+        reservation.grantIds,
+        reservation.memberShareIds,
+        reservation.reservedOn
+      )
       return new Response(
         JSON.stringify({
           error: error instanceof Error ? error.message : '文件保存失败，请稍后重试',
@@ -168,6 +172,7 @@ export async function POST(req: Request) {
       apiAccess: reservation.access,
       apiKeyOwners: reservation.keyOwners,
       apiKeyShareIds: reservation.keyShareIds,
+      reservedApiOn: reservation.reservedOn,
       reservedGrantIds: reservation.grantIds,
       reservedMemberShareIds: reservation.memberShareIds,
     },
@@ -206,7 +211,7 @@ export async function POST(req: Request) {
   try {
     task.id = await admitTask(user, task, teamId, fileBytes?.length || 0)
   } catch (error) {
-    await releaseApiGrants(reservation.grantIds, reservation.memberShareIds)
+    await releaseApiGrants(reservation.grantIds, reservation.memberShareIds, reservation.reservedOn)
     if (fileLocation) await removeUpload(fileLocation).catch(() => undefined)
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : '提交任务失败' }),
@@ -222,7 +227,11 @@ export async function POST(req: Request) {
         .update(tasksTable)
         .set({ status: TaskStatus.Failed, statusReason: { msg: '后台任务启动失败' } })
         .where(eq(tasksTable.id, task.id))
-      await releaseApiGrants(reservation.grantIds, reservation.memberShareIds)
+      await releaseApiGrants(
+        reservation.grantIds,
+        reservation.memberShareIds,
+        reservation.reservedOn
+      )
       throw error
     }
     return respData(task)

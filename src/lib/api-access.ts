@@ -173,6 +173,7 @@ export async function reserveApiAccess(
   platform: Platform = Platform.Minimax
 ): Promise<{
   access: ApiAccess
+  reservedOn: string
   grantIds: number[]
   memberShareIds: number[]
   keyOwners: { llm?: number; tts?: number }
@@ -181,6 +182,7 @@ export async function reserveApiAccess(
   const selection = await availableApiAccess(user, needsSearch, platform)
   if (selection.llm.error || selection.tts.error)
     throw new Error([selection.llm.error, selection.tts.error].filter(Boolean).join('；'))
+  const reservedOn = new Date().toISOString().slice(0, 10)
   const reserved: number[] = []
   const reservedShares: number[] = []
   try {
@@ -228,11 +230,12 @@ export async function reserveApiAccess(
       reserved.push(item.grantId)
     }
   } catch (error) {
-    await releaseApiGrants(reserved, reservedShares)
+    await releaseApiGrants(reserved, reservedShares, reservedOn)
     throw error
   }
   return {
     access: { llm: selection.llm.source, tts: selection.tts.source },
+    reservedOn,
     grantIds: reserved,
     memberShareIds: reservedShares,
     keyOwners: { llm: selection.llm.ownerUserId, tts: selection.tts.ownerUserId },
@@ -240,13 +243,17 @@ export async function reserveApiAccess(
   }
 }
 
-export async function releaseApiGrants(ids: number[], memberShareIds: number[] = []) {
+export async function releaseApiGrants(
+  ids: number[],
+  memberShareIds: number[] = [],
+  reservedOn: string = new Date().toISOString().slice(0, 10)
+) {
   for (const id of ids)
     await getDb()
       .update(apiGrantsTable)
       .set({
         usedEpisodes: sql`GREATEST(0, ${apiGrantsTable.usedEpisodes} - 1)`,
-        dailyUsed: sql`CASE WHEN ${apiGrantsTable.dailyOn}=to_char(now() at time zone 'UTC','YYYY-MM-DD') THEN greatest(0,${apiGrantsTable.dailyUsed}-1) ELSE ${apiGrantsTable.dailyUsed} END`,
+        dailyUsed: sql`CASE WHEN ${apiGrantsTable.dailyOn}=${reservedOn} THEN greatest(0,${apiGrantsTable.dailyUsed}-1) ELSE ${apiGrantsTable.dailyUsed} END`,
       })
       .where(eq(apiGrantsTable.id, id))
   for (const id of memberShareIds)
@@ -254,7 +261,7 @@ export async function releaseApiGrants(ids: number[], memberShareIds: number[] =
       .update(memberApiSharesTable)
       .set({
         usedEpisodes: sql`GREATEST(0, ${memberApiSharesTable.usedEpisodes} - 1)`,
-        dailyUsed: sql`CASE WHEN ${memberApiSharesTable.dailyOn}=to_char(now() at time zone 'UTC','YYYY-MM-DD') THEN greatest(0,${memberApiSharesTable.dailyUsed}-1) ELSE ${memberApiSharesTable.dailyUsed} END`,
+        dailyUsed: sql`CASE WHEN ${memberApiSharesTable.dailyOn}=${reservedOn} THEN greatest(0,${memberApiSharesTable.dailyUsed}-1) ELSE ${memberApiSharesTable.dailyUsed} END`,
       })
       .where(eq(memberApiSharesTable.id, id))
 }

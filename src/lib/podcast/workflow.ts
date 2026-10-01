@@ -200,6 +200,7 @@ async function markFailed(uuid: string, reason: string) {
       )
       .returning({ userInputs: tasksTable.userInputs })
     if (!failed) return
+    const reservedOn = (failed.userInputs as TaskUserInput | null)?.reservedApiOn || null
     const grantIds = (failed.userInputs as TaskUserInput | null)?.reservedGrantIds || []
     for (const id of new Set(grantIds)) {
       if (!Number.isInteger(id) || id < 1) continue
@@ -207,7 +208,7 @@ async function markFailed(uuid: string, reason: string) {
         .update(apiGrantsTable)
         .set({
           usedEpisodes: sql`GREATEST(0, ${apiGrantsTable.usedEpisodes} - 1)`,
-          dailyUsed: sql`CASE WHEN ${apiGrantsTable.dailyOn}=to_char(now() at time zone 'UTC','YYYY-MM-DD') THEN greatest(0,${apiGrantsTable.dailyUsed}-1) ELSE ${apiGrantsTable.dailyUsed} END`,
+          dailyUsed: sql`CASE WHEN ${apiGrantsTable.dailyOn}=${reservedOn} THEN greatest(0,${apiGrantsTable.dailyUsed}-1) ELSE ${apiGrantsTable.dailyUsed} END`,
         })
         .where(eq(apiGrantsTable.id, id))
     }
@@ -218,7 +219,7 @@ async function markFailed(uuid: string, reason: string) {
         .update(memberApiSharesTable)
         .set({
           usedEpisodes: sql`GREATEST(0, ${memberApiSharesTable.usedEpisodes} - 1)`,
-          dailyUsed: sql`CASE WHEN ${memberApiSharesTable.dailyOn}=to_char(now() at time zone 'UTC','YYYY-MM-DD') THEN greatest(0,${memberApiSharesTable.dailyUsed}-1) ELSE ${memberApiSharesTable.dailyUsed} END`,
+          dailyUsed: sql`CASE WHEN ${memberApiSharesTable.dailyOn}=${reservedOn} THEN greatest(0,${memberApiSharesTable.dailyUsed}-1) ELSE ${memberApiSharesTable.dailyUsed} END`,
         })
         .where(eq(memberApiSharesTable.id, id))
     }
