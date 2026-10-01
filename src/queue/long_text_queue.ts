@@ -1,5 +1,6 @@
 import { PodcastInputType, PodcastStep, ScriptItem, TaskUserInput } from "@/lib/podcast/types";
 import { speakerCount } from '@/lib/podcast/voices'
+import { INPUT_MAX_CHARACTERS } from '@/lib/podcast/limits'
 import { BaseJobData, LongTextResult } from "./types";
 
 import { getDb } from "@/db/db";
@@ -48,7 +49,7 @@ export function setupLongTextQueue() {
 export async function processLongTextTask(task: Task, enqueueNext = true) {
   const stepItem = taskGetStepItem(task, PodcastStep.LongText)
   const userInputs = task.userInputs as TaskUserInput
-  const input = stepItem.input!.slice(0, 100_000)
+  const input = stepItem.input!.slice(0, INPUT_MAX_CHARACTERS)
 
   // console.log(`[${currentStep}:processTask] generate script, key=${getTaskLogKey(task)}`)
   // 生成脚本

@@ -1,4 +1,4 @@
-import { and, eq, lt, ne, sql } from 'drizzle-orm'
+import { and, eq, isNull, lt, ne, sql } from 'drizzle-orm'
 import type { getDb } from '@/db/db'
 import { sessionsTable, tasksTable } from '@/db/schema'
 
@@ -9,6 +9,7 @@ export function staleAdminSessionFilter(keepId: number, cutoff: Date) {
     eq(sessionsTable.role, 'admin'),
     ne(sessionsTable.id, keepId),
     lt(sessionsTable.expiresAt, cutoff),
+    isNull(sessionsTable.loginCodeHash),
     sql`NOT EXISTS (SELECT 1 FROM ${tasksTable} WHERE ${tasksTable.userId} = ${sessionsTable.id})`,
   )
 }

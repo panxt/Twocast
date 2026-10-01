@@ -1,6 +1,7 @@
 import 'server-only'
 import fs from 'fs/promises'
 import path from 'path'
+import { storageUploadError } from './storage-errors'
 
 const BUCKET = 'podcast-audio'
 const UPLOAD_BUCKET = 'podcast-files'
@@ -25,7 +26,7 @@ export async function storeAudio(filename: string, audio: Buffer): Promise<strin
     headers: { authorization: `Bearer ${key}`, apikey: key, 'content-type': 'audio/mpeg', 'x-upsert': 'true' },
     body: new Uint8Array(audio),
   })
-  if (!response.ok) throw new Error(`Audio upload failed (${response.status}): ${(await response.text()).slice(0, 200)}`)
+  if (!response.ok) throw storageUploadError(response.status, await response.text(), '音频')
   return `supabase:${filename}`
 }
 
@@ -42,7 +43,7 @@ export async function storeUpload(filename: string, bytes: Buffer, contentType: 
     headers: { authorization: `Bearer ${key}`, apikey: key, 'content-type': contentType },
     body: new Uint8Array(bytes),
   })
-  if (!response.ok) throw new Error(`File upload failed (${response.status})`)
+  if (!response.ok) throw storageUploadError(response.status, await response.text(), '原文件')
   return `supabase-upload:${filename}`
 }
 
@@ -139,7 +140,7 @@ export async function storeCover(filename: string, bytes: Buffer, contentType: s
     headers: { authorization: `Bearer ${key}`, apikey: key, 'content-type': contentType, 'x-upsert': 'true' },
     body: new Uint8Array(bytes),
   })
-  if (!response.ok) throw new Error(`Cover upload failed (${response.status}): ${(await response.text()).slice(0, 200)}`)
+  if (!response.ok) throw storageUploadError(response.status, await response.text(), '封面')
   return `supabase-cover:${filename}`
 }
 

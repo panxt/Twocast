@@ -4,6 +4,11 @@ import { useEffect, useState } from 'react'
 import { CircleAlert, KeyRound, LoaderCircle } from 'lucide-react'
 import { CAPABILITY_LABELS, ShareCapability, TTS_CAPABILITIES } from '@/lib/api-capabilities'
 import { Platform } from '@/lib/podcast/types'
+import { useParams } from 'next/navigation'
+import { getLocalePath } from '@/utils/locale-util'
+import type { LocaleTypes } from '@/i18n/settings'
+import { MODEL_FIELD_HELP, ModelConfigGuide } from '@/components/podcast/ModelConfigGuide'
+import { UsageGuide } from '@/components/podcast/UsageGuide'
 
 const fields = [
   ['LLM_CHAT_URL', '聊天接口 URL'], ['LLM_CHAT_MODEL', '聊天模型'], ['LLM_API_KEY', '聊天 API Key'],
@@ -40,6 +45,9 @@ function EmptyLine({ children }: { children: React.ReactNode }) {
 }
 
 export default function SettingsPage() {
+  const locale = (useParams()?.locale || 'zh') as LocaleTypes
+  const [loggingOut, setLoggingOut] = useState(false)
+  const [renewingCode, setRenewingCode] = useState(false)
   const [admin, setAdmin] = useState(false)
   const [ready, setReady] = useState(false)
   const [values, setValues] = useState<Record<string, string>>({})
@@ -233,10 +241,26 @@ export default function SettingsPage() {
     if (response.ok) await loadShares()
   }
   async function renewLoginCode() {
-    const response = await fetch('/api/user/login-code', { method: 'POST' })
-    const data = await response.json()
-    setLoginCode(response.ok ? data.code : '')
-    setMessage(response.ok ? '请保存新的个人登录码；旧码已失效。' : data.error || '生成失败')
+    setRenewingCode(true)
+    try {
+      const response = await fetch('/api/user/login-code', { method: 'POST' })
+      const data = await response.json()
+      if (response.ok) setLoginCode(data.code)
+      setMessage(response.ok ? '请保存新的个人登录码；旧码已失效。' : data.error || '生成失败')
+    } catch { setMessage('登录码生成失败，请检查网络后重试') }
+    finally { setRenewingCode(false) }
+  }
+  async function logout() {
+    if (!window.confirm('退出前请保存个人登录码，以便回到同一账号。退出不会删除节目、私有 API 或分享设置。现在退出？')) return
+    setLoggingOut(true)
+    try {
+      const response = await fetch('/api/auth/logout', { method: 'POST' })
+      if (!response.ok) throw new Error('退出失败，请重试')
+      window.location.assign(getLocalePath(locale, '/enter-code'))
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '退出失败')
+      setLoggingOut(false)
+    }
   }
   async function saveProfile() {
     const response = await fetch('/api/user/profile', { method: 'PATCH',
@@ -335,6 +359,11 @@ export default function SettingsPage() {
           className="ys-btn-sm ys-btn-secondary">{savingToggle === kind ? '保存中…' : apiEnabled[kind] ? '停用' : '启用'}</button>
       </div>)}</div>
       <p className="text-xs text-ink-soft">密钥留空表示保留已有值。URL 只接受已接入服务的 HTTPS 地址。</p>
+      <ModelConfigGuide onApply={template => {
+        setValues(current => Object.fromEntries([...new Set([...Object.keys(current), ...Object.keys(template)])]
+          .map(key => [key, current[key] || template[key] || ''])))
+        setMessage('已填入空白的聊天字段；请填写自己的 API Key 后保存配置。')
+      }} />
       <div className="grid gap-4 sm:grid-cols-2">{fields.map(([key, label]) => <label key={key} className="flex flex-col gap-1.5">
         <span className="ys-label flex items-center gap-1.5">{label}{configured[key] && <span className="ys-pill bg-voice-tint py-0 text-[11px] text-voice-deep">已配置</span>}</span>
         <div className="flex gap-1.5">
@@ -345,6 +374,7 @@ export default function SettingsPage() {
           {!admin && secrets.has(key) && configured[key] && <button type="button" onClick={() => clearSecret(key)}
             className="ys-btn ys-btn-danger px-3 text-xs">移除</button>}
         </div>
+        <span className="text-xs leading-5 text-ink-soft">{MODEL_FIELD_HELP[key]}</span>
       </label>)}</div>
       <div><button onClick={save} className="ys-btn ys-btn-primary">保存配置</button></div>
     </section>
@@ -397,11 +427,18 @@ export default function SettingsPage() {
       </div>
     </section>
 
-    {!admin && <section className="ys-sheet flex flex-col gap-4 p-5 sm:p-6">
-      <SectionHeading title="个人登录码" description="更换设备或会话过期后，用个人登录码回到同一个账户及节目。" />
-      <div><button onClick={renewLoginCode} className="ys-btn ys-btn-secondary"><KeyRound className="h-4 w-4" aria-hidden="true" />生成新登录码</button></div>
+    <section className="ys-sheet flex flex-col gap-4 p-5 sm:p-6">
+      <SectionHeading title="账号与登录" description="个人登录码用于回到同一个账户；邀请码用于首次加入。重新生成个人码会立即使旧码失效，但不会退出当前浏览器。" />
+      <div className="flex flex-wrap gap-2"><button onClick={renewLoginCode} disabled={!currentUserId || renewingCode || loggingOut} className="ys-btn ys-btn-secondary"><KeyRound className="h-4 w-4" aria-hidden="true" />{renewingCode ? '正在生成…' : '生成新登录码'}</button>
+        <button type="button" onClick={logout} disabled={loggingOut || renewingCode || !currentUserId} className="ys-btn ys-btn-secondary">{loggingOut ? '正在退出…' : '退出当前账号'}</button></div>
       {loginCode && <output className="ys-code tracking-wider">{loginCode}</output>}
-    </section>}
+      <p className="text-sm text-ink-soft">登录码只显示一次，请保存在密码管理器里。浏览器会话有效期 30 天；同一账号在其他设备登录会替换原设备会话。</p>
+      <p className="text-sm text-ink-soft">{admin
+        ? '管理员忘记个人码但仍保持登录时，可在这里生成新码；全部退出且忘记码时，需要部署维护者通过 Vercel 的 BOOTSTRAP_ADMIN_CODE 恢复入口登录，再生成个人码。恢复入口会创建新的管理员账户。'
+        : '忘记个人码但仍保持登录时，可直接生成新码；已经退出时请联系管理员重置。不要再次兑换邀请码，否则会创建另一个账户。'}</p>
+      {admin && <p className="text-xs text-ink-soft">「撤销其他管理员登录」也会使那些管理员账户的个人登录码失效；部署恢复码需由维护者在 Vercel 单独轮换。</p>}
+    </section>
+    <UsageGuide resources />
 
     {admin && <>
       <section className="ys-sheet flex flex-wrap items-center justify-between gap-3 p-5">

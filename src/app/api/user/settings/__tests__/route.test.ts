@@ -38,6 +38,12 @@ describe('member API settings', () => {
     expect(mockSetUserSetting).not.toHaveBeenCalled()
   })
 
+  it('accepts the MiniMax mainland example shown in the configuration guide', async () => {
+    const response = await PUT(requestFor({ LLM_CHAT_URL: 'https://api.minimax.cn/v1/chat/completions' }))
+    expect(response.status).toBe(200)
+    expect(mockSetUserSetting).toHaveBeenCalledWith(5, 'LLM_CHAT_URL', 'https://api.minimax.cn/v1/chat/completions')
+  })
+
   it('allows a member to pause their own LLM key without removing it', async () => {
     const response = await PUT(requestFor({ API_LLM_ENABLED: '0' }))
     expect(response.status).toBe(200)

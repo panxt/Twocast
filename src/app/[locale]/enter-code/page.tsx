@@ -37,7 +37,7 @@ export default function EnterCode() {
     <section className="flex flex-col gap-6 lg:pl-10">
       <RouteMark className="w-full max-w-md" />
       <h1 className="ys-title max-w-[12em] text-3xl leading-tight sm:text-4xl lg:text-[44px]">把团队资料，寄成一期能听的节目。</h1>
-      <p className="max-w-[30em] text-base text-ink-soft">粘一段主题、一个链接或一份 PDF，两位主持人替你讲清楚；节目按目录归档，整个团队都能找到。</p>
+      <p className="max-w-[30em] text-base text-ink-soft">粘一段主题、一个链接或一份 PDF，选择单人讲述或双人对谈；节目按目录归档，由你决定是否共享给团队。</p>
     </section>
 
     <div className="w-full max-w-md justify-self-center">
@@ -64,6 +64,9 @@ export default function EnterCode() {
           {loading ? '正在验证…' : '进入工作台'}
         </button>
         <p className="text-xs text-ink-soft">邀请码只用于首次加入；成功后会给你一个个人登录码，请妥善保存。</p>
+        <details className="text-xs leading-5 text-ink-soft"><summary className="cursor-pointer">忘记登录码怎么办？</summary>
+          <p className="mt-2">如果还有设备保持登录，在设置的「账号与登录」生成新码；否则请联系管理员重置。管理员全部退出且丢失登录码时，请联系部署维护者使用部署恢复码登录。重新兑换邀请码会创建新的账户。</p>
+        </details>
       </form>}
     </div>
   </main>

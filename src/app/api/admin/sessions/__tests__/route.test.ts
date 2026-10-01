@@ -5,10 +5,11 @@ const mockUpdateReturning = jest.fn()
 const mockDeleteReturning = jest.fn()
 const mockUpdateWhere = jest.fn()
 const mockDeleteWhere = jest.fn()
+const mockSet = jest.fn(() => ({ where: mockUpdateWhere }))
 
 jest.mock('@/utils/user', () => ({ getCurrentUser: () => mockUser() }))
 jest.mock('@/db/db', () => ({ getDb: () => ({
-  update: () => ({ set: () => ({ where: mockUpdateWhere }) }),
+  update: () => ({ set: mockSet }),
   delete: () => ({ where: mockDeleteWhere }),
 }) }))
 
@@ -34,6 +35,7 @@ describe('admin session revocation', () => {
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual({ revoked: 2, purged: 3 })
     expect(mockUpdateWhere).toHaveBeenCalledTimes(1)
+    expect(mockSet).toHaveBeenCalledWith({ expiresAt: expect.any(Date), loginCodeHash: null })
     expect(mockDeleteWhere).toHaveBeenCalledTimes(1)
   })
 })

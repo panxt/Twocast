@@ -1,4 +1,4 @@
-import { ne, and, eq, sql } from 'drizzle-orm'
+import { ne, and, eq, isNotNull, or, sql } from 'drizzle-orm'
 import { NextResponse } from 'next/server'
 import { getDb } from '@/db/db'
 import { sessionsTable } from '@/db/schema'
@@ -10,8 +10,9 @@ export async function DELETE() {
   const user = await getCurrentUser()
   if (!user.isAdmin || !user.userId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const db = getDb()
-  const revoked = await db.update(sessionsTable).set({ expiresAt: new Date() })
-    .where(and(eq(sessionsTable.role, 'admin'), ne(sessionsTable.id, user.userId), sql`${sessionsTable.expiresAt} > NOW()`))
+  const revoked = await db.update(sessionsTable).set({ expiresAt: new Date(), loginCodeHash: null })
+    .where(and(eq(sessionsTable.role, 'admin'), ne(sessionsTable.id, user.userId),
+      or(sql`${sessionsTable.expiresAt} > NOW()`, isNotNull(sessionsTable.loginCodeHash))))
     .returning({ id: sessionsTable.id })
   const purged = await purgeExpiredAdminSessions(db, user.userId)
   return NextResponse.json({ revoked: revoked.length, purged })

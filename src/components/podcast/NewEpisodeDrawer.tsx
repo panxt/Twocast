@@ -32,7 +32,7 @@ export function NewEpisodeDrawer({ open, defaultFolder, onClose, onCreated }: {
             <div className="flex items-start justify-between gap-3 px-6 pt-6 sm:px-8">
               <div className="flex flex-col gap-1">
                 <Dialog.Title className="ys-title text-2xl">新建节目</Dialog.Title>
-                <p className="text-sm text-ink-soft">给一段资料，得到一期两位主持人对谈的播客。</p>
+                <p className="text-sm text-ink-soft">把资料变成一期单人讲述或双人对谈的播客。</p>
               </div>
               <button type="button" onClick={onClose} aria-label="关闭" className="ys-icon-btn h-9 w-9"><X className="h-[18px] w-[18px]" aria-hidden="true" /></button>
             </div>

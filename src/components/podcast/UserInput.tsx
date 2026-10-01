@@ -18,6 +18,9 @@ import { getLocalePath } from '@/utils/locale-util';
 import type { LocaleTypes } from '@/i18n/settings';
 import { AlignLeft, CircleAlert, FileText, FileUp, Lightbulb, Link2, LoaderCircle, Mic, Newspaper, X } from 'lucide-react';
 
+import { DOCUMENT_MAX_BYTES, INPUT_MAX_CHARACTERS } from '@/lib/podcast/limits';
+import { UsageGuide } from './UsageGuide';
+
 const SPEAKERS_KEY = 'ys-speakers';
 
 enum SelectType {
@@ -65,7 +68,7 @@ export function UserInput({ onSubmitSuccess, folderPath, extraFields }: UserInpu
   const [dragging, setDragging] = useState(false);
   const audioRefs = useRef<{ [key: string]: HTMLAudioElement | null }>({});
   const readyToSubmit = Boolean(platform && voiceId_1 && (speakers === 1 || voiceId_2) &&
-    (activeTab === PodcastInputType.File ? file : topic.trim()));
+    (activeTab === PodcastInputType.File ? file : topic.trim() && topic.trim().length <= INPUT_MAX_CHARACTERS));
 
   // 记住上次选的人数；默认两人对谈
   useEffect(() => {
@@ -209,7 +212,7 @@ export function UserInput({ onSubmitSuccess, folderPath, extraFields }: UserInpu
 
   const acceptFile = (candidate: File | undefined) => {
     if (!candidate) return;
-    if (candidate.size > 4_000_000) {
+    if (candidate.size > DOCUMENT_MAX_BYTES || candidate.size === 0) {
       toast.error('文件大小须在 4 MB 以内');
       setFile(null);
       return;
@@ -357,6 +360,10 @@ export function UserInput({ onSubmitSuccess, folderPath, extraFields }: UserInpu
       </div>
 
       {renderInputSection()}
+      {activeTab !== PodcastInputType.File && <p role="status" className={`text-xs ${topic.trim().length > INPUT_MAX_CHARACTERS ? 'text-alert-deep' : 'text-ink-soft'}`}>
+        {topic.trim().length.toLocaleString()} / {INPUT_MAX_CHARACTERS.toLocaleString()} 字符{topic.trim().length > INPUT_MAX_CHARACTERS ? '，内容过长，请拆分后提交' : ''}
+      </p>}
+      <UsageGuide />
 
       {apiWarning && <div role="status" className="ys-note flex items-start gap-2 bg-warn-tint text-warn-deep">
         <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />

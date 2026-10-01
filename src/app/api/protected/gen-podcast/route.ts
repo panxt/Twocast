@@ -21,6 +21,7 @@ import { start } from 'workflow/api';
 import { generatePodcastWorkflow } from '@/lib/podcast/workflow';
 import { reserveApiAccess, releaseApiGrants } from '@/lib/api-access';
 import { isValidFolderPath } from '@/lib/podcast/folder';
+import { DOCUMENT_MAX_BYTES, DOCUMENT_MAX_PAGES, INPUT_MAX_CHARACTERS, PENDING_EPISODES_LIMIT, PRODUCTION_DAILY_EPISODES } from '@/lib/podcast/limits';
 
 export async function POST(req: Request) {
   const user = await getCurrentUser()
@@ -32,12 +33,12 @@ export async function POST(req: Request) {
   const today = new Date(); today.setUTCHours(0, 0, 0, 0)
   const [usage] = await getDb().select({ count: count() }).from(tasksTable)
     .where(and(eq(tasksTable.userEmail, userEmail), gte(tasksTable.createdAt, today)))
-  if (usage.count >= (process.env.NODE_ENV === 'production' ? 3 : 100)) {
-    return new Response(JSON.stringify({ error: '今日生成次数已用完' }), { status: 429 })
+  if (usage.count >= (process.env.NODE_ENV === 'production' ? PRODUCTION_DAILY_EPISODES : 100)) {
+    return new Response(JSON.stringify({ error: `今日生成次数已用完，每账号每天最多 ${PRODUCTION_DAILY_EPISODES} 期（含失败记录，按 UTC 日期统计，北京时间次日 08:00 重置）` }), { status: 429 })
   }
   const [pending] = await getDb().select({ count: count() }).from(tasksTable)
     .where(and(eq(tasksTable.userEmail, userEmail), inArray(tasksTable.status, [TaskStatus.Pending, TaskStatus.Processing])))
-  if (pending.count >= 1) {
+  if (pending.count >= PENDING_EPISODES_LIMIT) {
     return new Response(JSON.stringify({ error: '请等待上一条播客完成' }), { status: 429 })
   }
 
@@ -70,13 +71,13 @@ export async function POST(req: Request) {
     if (!(file instanceof File)) return respErr('请选择文件')
     const extension = file.name.split('.').pop()?.toLowerCase()
     if (!extension || !['pdf', 'txt', 'md', 'text'].includes(extension)) return respErr('只支持 PDF、TXT、Markdown')
-    if (file.size < 1 || file.size > 4_000_000) return respErr('文件大小须在 4 MB 以内')
+    if (file.size < 1 || file.size > DOCUMENT_MAX_BYTES) return respErr('文件不能为空，且大小须在 4 MB 以内；请拆分或压缩后上传')
     const bytes = Buffer.from(await file.arrayBuffer())
     try {
       if (extension === 'pdf') {
         if (bytes.subarray(0, 5).toString() !== '%PDF-') return respErr('PDF 文件格式无效')
         const document = await getDocumentProxy(new Uint8Array(bytes))
-        if (document.numPages > 200) return respErr('PDF 最多支持 200 页')
+        if (document.numPages > DOCUMENT_MAX_PAGES) return respErr('PDF 最多支持 200 页，请按章节拆分后上传')
         const result = await extractText(document, { mergePages: true })
         text = result.text
       } else {
@@ -86,14 +87,15 @@ export async function POST(req: Request) {
       return respErr('无法提取文件文字；扫描版 PDF 需要先进行 OCR')
     }
     text = text.replace(/\n[\n]+/g, '\n').trim()
-    if (!text || text.length > 100_000) return respErr('提取的文字为空或超过 10 万字')
+    if (!text) return respErr('文件没有可提取的文字；扫描版 PDF 请先做 OCR')
+    if (text.length > INPUT_MAX_CHARACTERS) return respErr('提取文字超过 10 万字符，请按章节拆分后上传')
     fileName = file.name.slice(0, 255)
     fileBytes = bytes
     fileExtension = extension
   } else if (text && typeof text === 'string') {
     text = text.trim()
-    if (text.length > 100_000) {
-      return respErr("invalid params: text is too long");
+    if (text.length > INPUT_MAX_CHARACTERS) {
+      return respErr('正文最多支持 10 万字符，请拆分后提交');
     }
   }
   if (!text) {
@@ -113,7 +115,7 @@ export async function POST(req: Request) {
         fileExtension === 'pdf' ? 'application/pdf' : 'text/plain')
     } catch (error) {
       await releaseApiGrants(reservation.grantIds, reservation.memberShareIds)
-      return new Response(JSON.stringify({ error: '文件保存失败，请稍后重试' }),
+      return new Response(JSON.stringify({ error: error instanceof Error ? error.message : '文件保存失败，请稍后重试' }),
         { status: 500, headers: { 'content-type': 'application/json' } })
     }
   }

@@ -8,7 +8,7 @@ import { availableApiAccess, availableTtsAccess } from '@/lib/api-access'
 import { Platform } from '@/lib/podcast/types'
 
 const SECRETS = new Set(['LLM_API_KEY', 'LLM_SEARCH_API_KEY', 'MINIMAX_TOKEN', 'FISH_AUDIO_TOKEN', 'GEMINI_TTS_API_KEY'])
-const HOSTS = new Set(['api.minimaxi.com', 'api.minimax.io', 'api.openai.com',
+const HOSTS = new Set(['api.minimax.cn', 'api.minimaxi.com', 'api.minimax.io', 'api.openai.com',
   'openrouter.ai', 'api.deepseek.com', 'api.x.ai', 'api.moonshot.cn',
   'dashscope.aliyuncs.com', 'generativelanguage.googleapis.com'])
 
