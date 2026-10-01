@@ -3,7 +3,7 @@ import { getDb } from '@/db/db'
 import { quotaPoliciesTable, quotaReservationsTable, tasksTable } from '@/db/schema'
 import { getCurrentUser } from '@/utils/user'
 import { taskScopeWhere } from '@/lib/podcast/scope'
-export async function GET(req: Request) {
+async function dashboard(req: Request) {
   const user = await getCurrentUser()
   if (!user.userEmail) return Response.json({ error: '请先登录' }, { status: 401 })
   const url = new URL(req.url)
@@ -83,11 +83,18 @@ export async function GET(req: Request) {
     .from(tasksTable)
     .where(where)
     .groupBy(sql`1`)
-  const platformStorage = user.isAdmin
-    ? await db.execute(
+  let platformStorage: { bucket: string; objects: number; bytes: string }[] | null = null
+  let storageUnavailable = false
+  if (user.isAdmin) {
+    try {
+      platformStorage = await db.execute<{ bucket: string; objects: number; bytes: string }>(
         sql`select bucket_id as bucket, count(*)::int as objects, coalesce(sum((metadata->>'size')::bigint),0)::text as bytes from storage.objects where bucket_id in ('podcast-audio','podcast-files','podcast-covers','podcast-imports') group by bucket_id`
       )
-    : null
+    } catch (error) {
+      storageUnavailable = true
+      console.error('[dashboard] storage metrics unavailable', error)
+    }
+  }
   return Response.json(
     {
       stats,
@@ -99,6 +106,7 @@ export async function GET(req: Request) {
       platformStorage,
       isAdmin: user.isAdmin,
       notes: [
+        ...(storageUnavailable ? ['存储总量暂时不可用；其他用量统计正常。'] : []),
         '供应商余额与账单未接入；次数统计不等于实际费用。',
         '存储总量包含临时分段；个人音频大小统计逐步补齐历史数据。',
         '失败任务不占生成次数；供应商已发生的费用不自动退还。',
@@ -106,4 +114,13 @@ export async function GET(req: Request) {
     },
     { headers: { 'cache-control': 'no-store' } }
   )
+}
+
+export async function GET(req: Request) {
+  try {
+    return await dashboard(req)
+  } catch (error) {
+    console.error('[dashboard] request failed', error)
+    return Response.json({ error: '用量概览暂时无法加载，请稍后重试。' }, { status: 503 })
+  }
 }

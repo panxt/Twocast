@@ -45,7 +45,14 @@ async function api(path: string, body?: unknown, method = 'POST') {
       ? { cache: 'no-store' }
       : { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }
   )
-  const data = await response.json()
+  if (response.redirected || response.status === 401)
+    throw new Error('登录已失效，请重新登录后重试。')
+  let data
+  try {
+    data = await response.json()
+  } catch {
+    throw new Error('服务暂时无法响应，请稍后重试。')
+  }
   if (!response.ok) throw new Error(data.error || '操作失败')
   return data
 }
