@@ -24,6 +24,9 @@ BEGIN
   IF NOT has_schema_privilege('twocast_app','storage','USAGE') OR NOT has_column_privilege('twocast_app','storage.objects','metadata','SELECT') OR NOT has_column_privilege('twocast_app','storage.objects','bucket_id','SELECT') THEN
     RAISE EXCEPTION 'Missing storage metrics read access';
   END IF;
+  IF NOT has_column_privilege('twocast_app','storage.objects','name','SELECT') OR NOT has_column_privilege('twocast_app','storage.objects','created_at','SELECT') THEN
+    RAISE EXCEPTION 'Missing storage cleanup metadata read access';
+  END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='storage' AND tablename='objects' AND policyname='twocast_app_storage_metadata_read' AND roles=ARRAY['twocast_app']::name[] AND cmd='SELECT') THEN
     RAISE EXCEPTION 'Missing storage metrics RLS policy';
   END IF;
