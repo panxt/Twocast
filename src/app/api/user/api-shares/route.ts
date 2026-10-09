@@ -19,7 +19,7 @@ export async function GET() {
   const user = await getCurrentUser()
   if (!user.userEmail) return NextResponse.json({ error: '请先登录' }, { status: 401 })
   const db = getDb()
-  const peers = user.isAdmin
+  const peers = user.isSuperAdmin
     ? []
     : await db
         .select({ userId: teamMembersTable.userId })
@@ -31,7 +31,7 @@ export async function GET() {
     .where(
       and(
         gt(sessionsTable.expiresAt, new Date()),
-        user.isAdmin
+        user.isSuperAdmin
           ? undefined
           : inArray(sessionsTable.id, peers.length ? peers.map((p) => p.userId) : [-1])
       )
@@ -40,7 +40,7 @@ export async function GET() {
     .select()
     .from(memberApiSharesTable)
     .where(
-      user.isAdmin
+      user.isSuperAdmin
         ? undefined
         : or(
             eq(memberApiSharesTable.ownerUserId, user.userId),
@@ -173,7 +173,9 @@ export async function PATCH(request: NextRequest) {
     .limit(1)
   if (
     !share ||
-    (!user.isAdmin && share.ownerUserId !== user.userId && share.delegatedByUserId !== user.userId)
+    (!user.isSuperAdmin &&
+      share.ownerUserId !== user.userId &&
+      share.delegatedByUserId !== user.userId)
   ) {
     return NextResponse.json({ error: '分享不存在' }, { status: 404 })
   }
@@ -182,7 +184,7 @@ export async function PATCH(request: NextRequest) {
   if (input.allowReshare !== undefined && typeof input.allowReshare !== 'boolean') {
     return NextResponse.json({ error: '转分享开关无效' }, { status: 400 })
   }
-  if (input.allowReshare !== undefined && !user.isAdmin && share.ownerUserId !== user.userId) {
+  if (input.allowReshare !== undefined && !user.isSuperAdmin && share.ownerUserId !== user.userId) {
     return NextResponse.json({ error: '只有原 Key 持有人可以授权转分享' }, { status: 403 })
   }
   await db

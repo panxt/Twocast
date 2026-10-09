@@ -10,7 +10,7 @@ export async function GET() {
     .select()
     .from(memberApiSharesTable)
     .where(
-      user.isAdmin
+      user.isSuperAdmin
         ? undefined
         : or(
             eq(memberApiSharesTable.ownerUserId, user.userId),
@@ -18,8 +18,8 @@ export async function GET() {
             eq(memberApiSharesTable.delegatedByUserId, user.userId)
           )
     )
-  const grants = user.isAdmin ? await db.select().from(apiGrantsTable) : []
-  return Response.json({ shares, grants, userId: user.userId, isAdmin: user.isAdmin })
+  const grants = user.isSuperAdmin ? await db.select().from(apiGrantsTable) : []
+  return Response.json({ shares, grants, userId: user.userId, isAdmin: user.isSuperAdmin })
 }
 export async function PATCH(req: Request) {
   const user = await getCurrentUser()
@@ -35,7 +35,7 @@ export async function PATCH(req: Request) {
     return Response.json({ error: '每日额度无效；留空不限，0 暂停' }, { status: 400 })
   const db = getDb()
   if (b.kind === 'grant') {
-    if (!user.isAdmin) return Response.json({ error: 'Forbidden' }, { status: 403 })
+    if (!user.isSuperAdmin) return Response.json({ error: 'Forbidden' }, { status: 403 })
     await db
       .update(apiGrantsTable)
       .set({ dailyLimit: b.dailyLimit })
@@ -45,7 +45,7 @@ export async function PATCH(req: Request) {
       .select()
       .from(memberApiSharesTable)
       .where(eq(memberApiSharesTable.id, b.id))
-    if (!share || (!user.isAdmin && share.ownerUserId !== user.userId))
+    if (!share || (!user.isSuperAdmin && share.ownerUserId !== user.userId))
       return Response.json({ error: '仅原 Key 持有人可调整每日额度' }, { status: 403 })
     await db
       .update(memberApiSharesTable)

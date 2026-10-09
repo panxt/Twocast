@@ -231,7 +231,7 @@ export default function SettingsPage() {
     setAccess(data.access || null)
     setTtsAccess(data.ttsAccess || null)
     setReady(true)
-    if (me.isAdmin && refreshTeam) void loadTeam()
+    if (me.isSuperAdmin && refreshTeam) void loadTeam()
     if (refreshTeam) void loadShares()
   }
   // Initial data is loaded once; later updates call load or loadTeam explicitly.
@@ -255,7 +255,7 @@ export default function SettingsPage() {
     if (response.ok) await load(false)
   }
   async function clearSecret(key: string) {
-    if (admin) return
+    if (platformOwner) return
     const response = await fetch('/api/user/settings', {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
@@ -850,11 +850,11 @@ export default function SettingsPage() {
           天；同一账号在其他设备登录会替换原设备会话。
         </p>
         <p className="text-sm text-ink-soft">
-          {admin
-            ? '管理员忘记个人码但仍保持登录时，可在这里生成新码；全部退出且忘记码时，需要部署维护者通过 Vercel 的 BOOTSTRAP_ADMIN_CODE 恢复入口登录，再生成个人码。恢复入口会创建新的管理员账户。'
+          {platformOwner
+            ? '超级管理员忘记个人码但仍保持登录时，可在这里生成新码；全部退出且忘记码时，通过部署恢复入口登录，再生成个人码。恢复入口会恢复同一个超级管理员账号。'
             : '忘记个人码但仍保持登录时，可直接生成新码；已经退出时请联系管理员重置。不要再次兑换邀请码，否则会创建另一个账户。'}
         </p>
-        {admin && (
+        {platformOwner && (
           <p className="text-xs text-ink-soft">
             「撤销其他管理员登录」也会使那些管理员账户的个人登录码失效；部署恢复码需由维护者在
             Vercel 单独轮换。
@@ -867,7 +867,7 @@ export default function SettingsPage() {
       <FeishuLogin bind />
       <UsageGuide resources />
 
-      {admin && (
+      {platformOwner && (
         <>
           <section className="ys-sheet flex flex-wrap items-center justify-between gap-3 p-5">
             <SectionHeading

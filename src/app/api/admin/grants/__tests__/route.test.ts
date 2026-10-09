@@ -4,7 +4,7 @@ const mockInsert = jest.fn()
 const mockValues = jest.fn()
 const mockReturning = jest.fn()
 
-jest.mock('@/utils/user', () => ({ getCurrentUser: async () => ({ isAdmin: true }) }))
+jest.mock('@/utils/user', () => ({ getCurrentUser: async () => ({ isAdmin: true, isSuperAdmin: true }) }))
 jest.mock('@/db/db', () => ({ getDb: () => ({ insert: mockInsert }) }))
 
 const requestFor = (capability: string) => ({ json: async () => ({

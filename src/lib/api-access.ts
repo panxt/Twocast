@@ -14,7 +14,12 @@ import { getShareChain } from './member-share-chain'
 import { Platform } from './podcast/types'
 import { CAPABILITY_LABELS, ShareCapability, TTS_CAPABILITIES } from './api-capabilities'
 
-type User = { userId: number; inviteCodeId: number | null; isAdmin: boolean }
+type User = {
+  userId: number
+  inviteCodeId: number | null
+  isAdmin: boolean
+  isSuperAdmin?: boolean
+}
 type Capability = 'llm' | 'tts'
 
 async function configured(userId: number, keys: SettingKey[], own: boolean) {
@@ -74,7 +79,7 @@ async function selectCapability(
   const ownEnabled = await enabled(user.userId, capability, true)
   const ownConfigured = await configured(user.userId, keys, true)
   if (ownEnabled && ownConfigured) return { source: 'own' }
-  if (user.isAdmin) {
+  if (user.isSuperAdmin) {
     if (!(await enabled(user.userId, capability, false)))
       return { source: 'admin', error: `${label} API 已停用，请在设置中启用` }
     return (await configured(user.userId, keys, false))
