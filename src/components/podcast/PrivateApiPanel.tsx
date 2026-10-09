@@ -77,7 +77,9 @@ export default function PrivateApiPanel() {
       >
         <p className="text-sm text-ink-soft">
           启用且配置完整时优先使用私有 Key。停用后不再调用此
-          Key；有共享授权时可使用共享额度。密钥不会展示给其他成员，留空保留已有密钥。
+          Key；有共享授权时可使用共享额度。未配置自己的 API 不代表自动获得管理员的 Key。
+          MiniMax 配音需填写 Group ID 和 API Key；聊天模型需单独配置。启停开关修改后需保存生效，
+          只影响自己的私有配置。密钥不会展示给其他成员，留空保留已有密钥。
         </p>
         {fields.map(([key, label]) => (
           <label key={key} className="block text-sm">
