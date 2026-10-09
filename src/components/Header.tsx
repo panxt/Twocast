@@ -74,6 +74,13 @@ export default function Header() {
               >
                 设置
               </Link>
+              <Link
+                prefetch={false}
+                href={getLocalePath(locale, '/feedback')}
+                className={navClass(pathname.endsWith('/feedback'))}
+              >
+                反馈
+              </Link>
             </>
           )}
           <ThemeSwitch />

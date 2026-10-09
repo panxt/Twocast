@@ -163,6 +163,15 @@ export default function Sidebar() {
       show: true,
     },
     {
+      key: 'feedback',
+      href: getLocalePath(locale, '/feedback'),
+      label: '问题反馈',
+      Icon: Users,
+      active: pathname.endsWith('/feedback'),
+      badge: '',
+      show: true,
+    },
+    {
       key: 'workspace',
       href: workspace,
       label: '管理工作台',
