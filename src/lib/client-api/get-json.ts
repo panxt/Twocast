@@ -15,6 +15,14 @@ export function getJson<T = any>(path: string): Promise<T> {
       })
       if (!response.ok) throw new Error(body.error || '加载失败')
       return body
+    } catch (error) {
+      if (error instanceof Error && ['TimeoutError', 'AbortError'].includes(error.name)) {
+        throw new Error('请求超时，请重试；若持续失败，请检查代理线路或联系管理员')
+      }
+      if (error instanceof TypeError) {
+        throw new Error('网络连接失败，请检查网络或代理后重试')
+      }
+      throw error
     } finally {
       pendingRequests.delete(path)
     }

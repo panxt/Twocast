@@ -99,7 +99,7 @@ export function EpisodeCard({
       className={`ys-sheet flex flex-col overflow-hidden transition-colors ${playing ? 'border-voice' : ''}`}
     >
       {ready ? (
-        <Link href={href} aria-label={`打开 ${titleOf(task)}`} className="block">
+        <Link prefetch={false} href={href} aria-label={`打开 ${titleOf(task)}`} className="block">
           <CoverArt
             variant={playing ? 'playing' : 'ready'}
             coverUrl={task.cover_url}
@@ -120,6 +120,7 @@ export function EpisodeCard({
       <div className="flex flex-1 flex-col gap-2 p-4">
         {ready ? (
           <Link
+            prefetch={false}
             href={href}
             className="line-clamp-2 text-[15px] font-semibold leading-snug text-ink hover:text-brand"
           >

@@ -191,6 +191,7 @@ export default function Sidebar() {
         className={`flex items-center ${collapsed ? 'flex-col gap-3' : 'justify-between gap-2 px-1.5'}`}
       >
         <Link
+          prefetch={false}
           href={home}
           className="flex min-w-0 items-center gap-2.5 text-ink"
           aria-label={siteMetadata.headerTitle}
@@ -221,6 +222,7 @@ export default function Sidebar() {
       </div>
 
       <Link
+        prefetch={false}
         href={withQuery({ new: '1', folder })}
         title={collapsed ? '新建节目' : undefined}
         aria-label="新建节目"
@@ -238,6 +240,7 @@ export default function Sidebar() {
           .filter((item) => item.show)
           .map(({ key, href, label, Icon, active, badge }) => (
             <Link
+              prefetch={false}
               key={key}
               href={href}
               aria-current={active ? 'page' : undefined}
@@ -279,12 +282,17 @@ export default function Sidebar() {
             <Folder className="h-3.5 w-3.5" aria-hidden="true" />
             目录
           </span>
-          <Link href={withQuery({ scope })} className={folderClass(onHome && !folder)}>
+          <Link
+            prefetch={false}
+            href={withQuery({ scope })}
+            className={folderClass(onHome && !folder)}
+          >
             <span>全部</span>
             {total !== null && <span className="text-xs tabular-nums text-ink-faint">{total}</span>}
           </Link>
           {folders.map((item) => (
             <Link
+              prefetch={false}
               key={item.path}
               href={withQuery({ folder: item.path, scope })}
               aria-current={folder === item.path ? 'page' : undefined}
@@ -302,6 +310,7 @@ export default function Sidebar() {
       )}
       {collapsed && (
         <Link
+          prefetch={false}
           href={withQuery({ scope })}
           title="目录"
           aria-label="目录"

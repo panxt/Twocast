@@ -41,6 +41,7 @@ export default function Header() {
     >
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
         <Link
+          prefetch={false}
           href={home}
           aria-label={siteMetadata.headerTitle}
           className="flex min-w-0 items-center gap-3 text-ink"
@@ -54,17 +55,19 @@ export default function Header() {
         <nav aria-label="主导航" className="flex shrink-0 items-center gap-1">
           {authenticated && !onEnterCode && (
             <>
-              <Link href={`${home}?new=1`} className="ys-btn-sm ys-btn-primary">
+              <Link prefetch={false} href={`${home}?new=1`} className="ys-btn-sm ys-btn-primary">
                 <Plus className="h-4 w-4" strokeWidth={2.5} aria-hidden="true" />
                 新建
               </Link>
               <Link
+                prefetch={false}
                 href={getLocalePath(locale, '/workspace')}
                 className={navClass(pathname.endsWith('/workspace'))}
               >
                 工作台
               </Link>
               <Link
+                prefetch={false}
                 href={settings}
                 aria-current={pathname === settings ? 'page' : undefined}
                 className={navClass(pathname === settings)}
