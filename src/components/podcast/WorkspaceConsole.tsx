@@ -72,10 +72,10 @@ const blankPolicy: Policy = {
 export default function WorkspaceConsole({
   viewer,
 }: {
-  viewer: { isAdmin: boolean; isSuperAdmin: boolean; teamAdminIds: number[] }
+  viewer: { isAdmin: boolean; isSuperAdmin: boolean; teamAdminIds: number[]; hasTeams: boolean }
 }) {
   const [tab, setTab] = useState('overview')
-  const [peopleView, setPeopleView] = useState('accounts')
+  const [peopleView, setPeopleView] = useState(viewer.isAdmin ? 'accounts' : 'teams')
   const section = tab === 'people' ? peopleView : tab
   const [loading, setLoading] = useState(false)
   const loadVersion = useRef(0)
@@ -168,13 +168,8 @@ export default function WorkspaceConsole({
       <nav aria-label="工作台栏目" className="flex flex-wrap gap-2">
         {[
           ['overview', '使用概览'],
-          ['teams', '权限分组'],
-          ...(admin
-            ? [
-                ['people', '用户与邀请'],
-                ['quotas', '额度管理'],
-              ]
-            : []),
+          ...(admin || viewer.hasTeams ? [['people', '用户与邀请']] : []),
+          ...(admin ? [['quotas', '额度管理']] : []),
           ['shares', 'API 分享额度'],
           ['imports', '导入作品'],
           ['recycle', '回收站'],
@@ -196,11 +191,16 @@ export default function WorkspaceConsole({
           </button>
         </p>
       )}
-      {tab === 'people' && admin && (
+      {tab === 'people' && (
         <div className="flex gap-2" aria-label="用户与邀请">
           {[
-            ['accounts', '用户与角色'],
-            ['invites', '邀请码'],
+            ...(admin
+              ? [
+                  ['accounts', '用户与角色'],
+                  ['invites', '邀请码'],
+                ]
+              : []),
+            ['teams', '权限分组（可选）'],
           ].map(([id, label]) => (
             <button
               key={id}

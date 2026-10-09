@@ -11,6 +11,7 @@ export default async function Page({ params }: { params: Promise<{ locale: strin
         isAdmin: user.isAdmin,
         isSuperAdmin: user.isSuperAdmin,
         teamAdminIds: user.teamAdminIds,
+        hasTeams: user.teamIds.length > 0,
       }}
     />
   )
