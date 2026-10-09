@@ -78,7 +78,7 @@ export async function GET(req: NextRequest) {
       .from(sessionsTable)
       .where(eq(sessionsTable.id, identity.userId))
     // Administratively disabled accounts cannot return through SSO.
-    if (!account || (!account.loginCodeHash && account.expiresAt <= new Date()))
+    if (!account || account.disabled || (!account.loginCodeHash && account.expiresAt <= new Date()))
       return finish('/zh/enter-code?error=feishu_disabled')
     const tokenValue = randomBytes(32).toString('hex'),
       expiresAt = new Date(Date.now() + 30 * 86400000)

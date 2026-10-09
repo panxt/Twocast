@@ -23,7 +23,7 @@ export async function GET() {
 }
 
 export async function PUT(request: NextRequest) {
-  if (!(await getCurrentUser()).isAdmin)
+  if (!(await getCurrentUser()).isSuperAdmin)
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const input = await request.json().catch(() => null)
   if (!input || typeof input !== 'object')

@@ -14,7 +14,7 @@ describe('personal login-code recovery', () => {
   beforeEach(() => {
     jest.clearAllMocks()
   })
-  it.each(['admin', 'member'])('restores the existing %s identity and permission', async (role) => {
+  it.each(['super_admin', 'admin', 'member'])('restores the existing %s identity and permission', async (role) => {
     mockReturning.mockResolvedValue([{ id: 7, role }])
     const response = await POST({
       json: async () => ({ code: 'RECOVERY-CODE-FOR-TEST-ONLY-123456' }),

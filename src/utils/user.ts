@@ -17,6 +17,7 @@ export async function getCurrentUser() {
       userId: 0,
       userEmail: 'local@twocast.invalid',
       isAdmin: true,
+      isSuperAdmin: true,
       isTeamMember: true,
       teamIds: [] as number[],
       teamAdminIds: [] as number[],
@@ -31,6 +32,7 @@ export async function getCurrentUser() {
       userId: 0,
       userEmail: '',
       isAdmin: false,
+      isSuperAdmin: false,
       isTeamMember: false,
       teamIds: [] as number[],
       teamAdminIds: [] as number[],
@@ -58,7 +60,8 @@ export async function getCurrentUser() {
       and(
         eq(deviceSessionsTable.tokenHash, sha256(token)),
         gt(deviceSessionsTable.expiresAt, new Date()),
-        gt(sessionsTable.expiresAt, new Date())
+        gt(sessionsTable.expiresAt, new Date()),
+        eq(sessionsTable.disabled, false)
       )
     )
     .groupBy(sessionsTable.id)
@@ -68,17 +71,20 @@ export async function getCurrentUser() {
       userId: 0,
       userEmail: '',
       isAdmin: false,
+      isSuperAdmin: false,
       isTeamMember: false,
       teamIds: [] as number[],
       teamAdminIds: [] as number[],
       inviteCodeId: null,
       displayName: '',
     }
-  const isAdmin = session.role === 'admin'
+  const isSuperAdmin = session.role === 'super_admin'
+  const isAdmin = isSuperAdmin || session.role === 'admin'
   return {
     userId: session.id,
     userEmail: isAdmin ? 'admin@twocast.invalid' : `invite-${session.id}@twocast.invalid`,
     isAdmin,
+    isSuperAdmin,
     isTeamMember: isAdmin || session.teamIds.length > 0,
     teamIds: session.teamIds,
     teamAdminIds: session.teamAdminIds,

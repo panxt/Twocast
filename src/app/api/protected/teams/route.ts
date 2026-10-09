@@ -32,11 +32,11 @@ export async function GET() {
     : []
   const users = user.isAdmin
     ? await db
-        .select({ id: sessionsTable.id, displayName: sessionsTable.displayName })
+        .select({ id: sessionsTable.id, displayName: sessionsTable.displayName, role: sessionsTable.role })
         .from(sessionsTable)
     : []
   return Response.json(
-    { teams, members, users, isAdmin: user.isAdmin, teamAdminIds: user.teamAdminIds },
+    { teams, members, users, isAdmin: user.isAdmin, isSuperAdmin: user.isSuperAdmin, teamAdminIds: user.teamAdminIds },
     { headers: { 'cache-control': 'no-store' } }
   )
 }
@@ -79,9 +79,10 @@ export async function PATCH(request: Request) {
         { status: 403 }
       )
     const [account] = await db
-      .select({ id: sessionsTable.id })
+      .select({ id: sessionsTable.id, role: sessionsTable.role })
       .from(sessionsTable)
       .where(eq(sessionsTable.id, userId))
+    if (account?.role === 'super_admin' && !user.isSuperAdmin) return Response.json({ error: '不能修改超级管理员的团队权限' }, { status: 403 })
     if (!account) return Response.json({ error: '成员不存在' }, { status: 404 })
     if (body.role === 'remove')
       await db

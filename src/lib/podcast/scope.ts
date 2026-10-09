@@ -10,7 +10,9 @@ type Viewer = {
 }
 
 export function taskScopeWhere(viewer: Viewer, scope: string): SQL | undefined {
+  if (!viewer.userEmail) return sql`false`
   const visible = isNull(tasksTable.deletedAt)
+  if (scope === 'public') return and(visible, eq(tasksTable.visibility, 'public'))
   if (viewer.isAdmin && scope === 'all') return visible
   const owner =
     viewer.userId !== undefined

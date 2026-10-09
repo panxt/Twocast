@@ -1,15 +1,15 @@
-import { sql } from 'drizzle-orm'
+import { sql, eq } from 'drizzle-orm'
 import { getDb } from '@/db/db'
-import { quotaPoliciesTable } from '@/db/schema'
+import { quotaPoliciesTable, sessionsTable } from '@/db/schema'
 import { getCurrentUser } from '@/utils/user'
 export async function GET() {
-  if (!(await getCurrentUser()).isAdmin)
-    return Response.json({ error: 'Forbidden' }, { status: 403 })
+  const viewer = await getCurrentUser()
+  if (!viewer.isAdmin) return Response.json({ error: 'Forbidden' }, { status: 403 })
   return Response.json({ policies: await getDb().select().from(quotaPoliciesTable) })
 }
 export async function PUT(req: Request) {
-  if (!(await getCurrentUser()).isAdmin)
-    return Response.json({ error: 'Forbidden' }, { status: 403 })
+  const viewer = await getCurrentUser()
+  if (!viewer.isAdmin) return Response.json({ error: 'Forbidden' }, { status: 403 })
   const b = await req.json().catch(() => null)
   if (
     !b ||
@@ -23,6 +23,15 @@ export async function PUT(req: Request) {
   for (const key of ['dailyLimit', 'totalLimit', 'concurrentLimit', 'storageBytes'])
     if (b[key] !== null && (!Number.isSafeInteger(b[key]) || b[key] < 0))
       return Response.json({ error: '额度须为非负整数，留空表示不限量' }, { status: 400 })
+  if (!viewer.isSuperAdmin && b.scope === 'user') {
+    const [target] = await getDb()
+      .select({ role: sessionsTable.role })
+      .from(sessionsTable)
+      .where(eq(sessionsTable.id, b.scopeId))
+      .limit(1)
+    if (target?.role === 'super_admin')
+      return Response.json({ error: '不能修改超级管理员的额度' }, { status: 403 })
+  }
   const values = {
     scope: b.scope,
     scopeId: b.scopeId,

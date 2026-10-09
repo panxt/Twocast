@@ -4,19 +4,21 @@ import { getDb } from '@/db/db'
 import { inviteCodesTable, inviteTeamsTable, teamsTable } from '@/db/schema'
 import { getCurrentUser, sha256 } from '@/utils/user'
 export async function GET() {
-  if (!(await getCurrentUser()).isAdmin)
-    return Response.json({ error: 'Forbidden' }, { status: 403 })
+  const viewer = await getCurrentUser()
+  if (!viewer.isAdmin) return Response.json({ error: 'Forbidden' }, { status: 403 })
   const db = getDb()
   const [codes, assignments] = await Promise.all([
     db
       .select({
         id: inviteCodesTable.id,
+        accountRole: inviteCodesTable.accountRole,
         label: inviteCodesTable.label,
         maxUses: inviteCodesTable.maxUses,
         usedCount: inviteCodesTable.usedCount,
         expiresAt: inviteCodesTable.expiresAt,
       })
-      .from(inviteCodesTable),
+      .from(inviteCodesTable)
+      .where(viewer.isSuperAdmin ? undefined : eq(inviteCodesTable.accountRole, 'member')),
     db.select().from(inviteTeamsTable),
   ])
   return Response.json({ codes, assignments })
@@ -28,8 +30,8 @@ export async function PATCH(req: Request) {
   return save(req, true)
 }
 async function save(req: Request, update: boolean) {
-  if (!(await getCurrentUser()).isAdmin)
-    return Response.json({ error: 'Forbidden' }, { status: 403 })
+  const viewer = await getCurrentUser()
+  if (!viewer.isAdmin) return Response.json({ error: 'Forbidden' }, { status: 403 })
   const b = await req.json().catch(() => null)
   if (
     !b ||
@@ -44,6 +46,9 @@ async function save(req: Request, update: boolean) {
     (update && (!Number.isInteger(b.id) || typeof b.active !== 'boolean'))
   )
     return Response.json({ error: '邀请码参数无效' }, { status: 400 })
+  const role = b.accountRole ?? 'member'
+  if (!['member', 'admin'].includes(role) || (role === 'admin' && !viewer.isSuperAdmin))
+    return Response.json({ error: '仅超级管理员可创建管理员内测码' }, { status: 403 })
   const ids = [...new Set<number>(b.teamIds)]
   const db = getDb()
   if (
@@ -66,11 +71,16 @@ async function save(req: Request, update: boolean) {
           .from(inviteCodesTable)
           .where(eq(inviteCodesTable.id, id))
           .for('update')
+        if (current?.accountRole === 'admin' && !viewer.isSuperAdmin)
+          throw new Error('无权管理管理员内测码')
+        if (current && current.usedCount > 0 && current.accountRole !== role)
+          throw new Error('已兑换的邀请码不能改变账号角色，请在账号管理中调整')
         if (!current || current.usedCount > b.maxUses)
           throw new Error('邀请码不存在，或上限低于已兑换人数')
         await tx
           .update(inviteCodesTable)
           .set({
+            accountRole: role,
             label: b.label,
             maxUses: b.maxUses,
             teamAccess: ids.length > 0,
@@ -82,6 +92,7 @@ async function save(req: Request, update: boolean) {
         const [created] = await tx
           .insert(inviteCodesTable)
           .values({
+            accountRole: role,
             label: b.label,
             maxUses: b.maxUses,
             teamAccess: ids.length > 0,

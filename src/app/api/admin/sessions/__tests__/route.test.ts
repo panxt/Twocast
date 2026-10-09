@@ -8,10 +8,12 @@ const mockDeleteWhere = jest.fn()
 const mockSet = jest.fn(() => ({ where: mockUpdateWhere }))
 
 jest.mock('@/utils/user', () => ({ getCurrentUser: () => mockUser() }))
-jest.mock('@/db/db', () => ({ getDb: () => ({
-  update: () => ({ set: mockSet }),
-  delete: () => ({ where: mockDeleteWhere }),
-}) }))
+jest.mock('@/db/db', () => ({
+  getDb: () => ({
+    update: () => ({ set: mockSet }),
+    delete: () => ({ where: mockDeleteWhere }),
+  }),
+}))
 
 describe('admin session revocation', () => {
   beforeEach(() => {
@@ -29,8 +31,14 @@ describe('admin session revocation', () => {
     expect(mockDeleteWhere).not.toHaveBeenCalled()
   })
 
+  it('refuses ordinary administrators before touching other administrator sessions', async () => {
+    mockUser.mockResolvedValue({ isAdmin: true, isSuperAdmin: false, userId: 9 })
+    expect((await DELETE()).status).toBe(403)
+    expect(mockSet).not.toHaveBeenCalled()
+  })
+
   it('revokes the other live admin sessions and purges stale unused ones', async () => {
-    mockUser.mockResolvedValue({ isAdmin: true, userId: 1 })
+    mockUser.mockResolvedValue({ isAdmin: true, isSuperAdmin: true, userId: 1 })
     const response = await DELETE()
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual({ revoked: 2, purged: 3 })

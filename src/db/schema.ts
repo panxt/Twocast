@@ -45,7 +45,7 @@ export const tasksTable = pgTable('tasks', {
   quotaTeamId: integer('quota_team_id'),
   audioBytes: bigint('audio_bytes', { mode: 'number' }).notNull().default(0),
   visibility: varchar('visibility', { length: 8 })
-    .$type<'private' | 'team'>()
+    .$type<'private' | 'team' | 'public'>()
     .notNull()
     .default('private'),
   // 封面：supabase-cover:<file> 或本地 /assets/covers/<file>
@@ -60,6 +60,7 @@ export const inviteCodesTable = pgTable('invite_codes', {
   id: integer().primaryKey().generatedByDefaultAsIdentity(),
   codeHash: varchar('code_hash', { length: 64 }).notNull().unique(),
   label: varchar('label', { length: 120 }),
+  accountRole: varchar('account_role', { length: 16 }).notNull().default('member'),
   maxUses: integer('max_uses').notNull().default(1),
   usedCount: integer('used_count').notNull().default(0),
   dailyMaxUses: integer('daily_max_uses'),
@@ -75,6 +76,7 @@ export const sessionsTable = pgTable('invite_sessions', {
   tokenHash: varchar('token_hash', { length: 64 }).notNull().unique(),
   inviteCodeId: integer('invite_code_id'),
   role: varchar('role', { length: 16 }).notNull().default('member'),
+  disabled: boolean('disabled').notNull().default(false),
   teamAccess: boolean('team_access').notNull().default(false),
   loginCodeHash: varchar('login_code_hash', { length: 64 }).unique(),
   displayName: varchar('display_name', { length: 80 }),

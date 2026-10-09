@@ -144,6 +144,15 @@ export default function Sidebar() {
       show: true,
     },
     {
+      key: 'public',
+      href: withQuery({ scope: 'public' }),
+      label: '公共空间',
+      Icon: Users,
+      active: onHome && scope === 'public',
+      badge: '',
+      show: true,
+    },
+    {
       key: 'team',
       href: withQuery({ scope: 'team' }),
       label: '团队共享',

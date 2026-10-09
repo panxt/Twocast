@@ -52,6 +52,7 @@ export function EpisodeGrid({
   const [teamOptions, setTeamOptions] = useState<{ id: number; name: string; active: boolean }[]>(
     []
   )
+  const [sharingScope, setSharingScope] = useState<'private' | 'team' | 'public'>('private')
   const [selectedTeams, setSelectedTeams] = useState<number[]>([])
   const [folders, setFolders] = useState<FolderOption[]>([])
   const initialQuery = JSON.stringify([
@@ -185,12 +186,13 @@ export function EpisodeGrid({
     }
   }
   async function toggleSharing(task: TaskVO, targetIds?: number[]) {
-    if (task.visibility !== 'team' && !targetIds) {
+    if (!targetIds) {
       try {
         const response = await fetch('/api/protected/teams')
         const body = await response.json()
         if (!response.ok) throw new Error(body.error)
         setTeamOptions(body.teams.filter((t) => t.active))
+        setSharingScope(task.visibility || 'private')
         setSelectedTeams([])
         setSharing(task)
       } catch {
@@ -198,7 +200,7 @@ export function EpisodeGrid({
       }
       return
     }
-    const next = task.visibility === 'team' ? 'private' : 'team'
+    const next = sharingScope
     setBusy(task.uuid)
     try {
       const response = await fetch(`/api/protected/tasks/${task.uuid}`, {
@@ -209,7 +211,13 @@ export function EpisodeGrid({
       const body = await response.json()
       if (!response.ok) throw new Error(body.error || '更新共享范围失败')
       setSharing(null)
-      toast.success(next === 'team' ? '已共享给团队' : '已设为仅自己可见')
+      toast.success(
+        next === 'public'
+          ? '已分享到公共空间'
+          : next === 'team'
+            ? '已共享给团队'
+            : '已设为仅自己可见'
+      )
       bump()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '更新共享范围失败')
@@ -366,32 +374,47 @@ export function EpisodeGrid({
         <div className="fixed inset-0 bg-black/40" aria-hidden="true" />
         <div className="fixed inset-0 flex items-center justify-center p-4">
           <Dialog.Panel className="ys-sheet w-full max-w-md space-y-4 p-6">
-            <Dialog.Title className="ys-title text-xl">选择共享团队</Dialog.Title>
+            <Dialog.Title className="ys-title text-xl">调整共享范围</Dialog.Title>
             <p className="text-sm text-ink-soft">
-              音频、脚本、字幕和原文件一起共享。取消共享可从节目菜单操作。
+              公共空间对所有已登录成员开放。分享包含音频、脚本、字幕和原文件，请确认内容适合分享。
             </p>
-            {!teamOptions.length && <p>还没有可共享的团队，请联系管理员。</p>}
-            {teamOptions.map((t) => (
-              <label key={t.id} className="flex gap-2">
-                <input
-                  type="checkbox"
-                  checked={selectedTeams.includes(t.id)}
-                  onChange={(e) =>
-                    setSelectedTeams((v) =>
-                      e.target.checked ? [...v, t.id] : v.filter((id) => id !== t.id)
-                    )
-                  }
-                />
-                {t.name}
-              </label>
-            ))}
+            <label className="block">
+              可见范围
+              <select
+                className="ys-field"
+                value={sharingScope}
+                onChange={(e) => setSharingScope(e.target.value as typeof sharingScope)}
+              >
+                <option value="private">仅自己</option>
+                <option value="team">指定团队</option>
+                <option value="public">公共空间（所有已登录成员）</option>
+              </select>
+            </label>
+            {sharingScope === 'team' && !teamOptions.length && (
+              <p>还没有可共享的团队，请联系管理员。</p>
+            )}
+            {sharingScope === 'team' &&
+              teamOptions.map((t) => (
+                <label key={t.id} className="flex gap-2">
+                  <input
+                    type="checkbox"
+                    checked={selectedTeams.includes(t.id)}
+                    onChange={(e) =>
+                      setSelectedTeams((v) =>
+                        e.target.checked ? [...v, t.id] : v.filter((id) => id !== t.id)
+                      )
+                    }
+                  />
+                  {t.name}
+                </label>
+              ))}
             <div className="flex gap-2">
               <button
                 className="ys-btn ys-btn-primary"
-                disabled={Boolean(busy) || !selectedTeams.length}
+                disabled={Boolean(busy) || (sharingScope === 'team' && !selectedTeams.length)}
                 onClick={() => sharing && toggleSharing(sharing, selectedTeams)}
               >
-                确认共享
+                保存范围
               </button>
               <button
                 className="ys-btn ys-btn-secondary"

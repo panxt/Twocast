@@ -51,3 +51,22 @@ it('never shares across unrelated teams or through the old boolean flag', () => 
     })
   ).toBe(false)
 })
+
+it('public space is readable by signed-in users without granting edit access', () => {
+  const task = { userId: 1, userEmail: owner.userEmail, visibility: 'public' as const }
+  expect(canReadTask(task, guest)).toBe(true)
+  expect(canManageTask(task, guest)).toBe(false)
+  expect(canReadTask(task, { ...guest, userEmail: '' })).toBe(false)
+  expect(canReadTask({ ...task, deletedAt: new Date() }, guest)).toBe(false)
+})
+it('uses stable account IDs rather than the shared old administrator email', () => {
+  const task = { userId: 1, userEmail: 'admin@twocast.invalid', visibility: 'private' as const }
+  const formerAdmin = {
+    userId: 2,
+    userEmail: 'admin@twocast.invalid',
+    isAdmin: false,
+    isTeamMember: false,
+  }
+  expect(canReadTask(task, formerAdmin)).toBe(false)
+  expect(canManageTask(task, formerAdmin)).toBe(false)
+})

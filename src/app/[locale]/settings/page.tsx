@@ -114,6 +114,7 @@ export default function SettingsPage() {
   const locale = (useParams()?.locale || 'zh') as LocaleTypes
   const [loggingOut, setLoggingOut] = useState(false)
   const [renewingCode, setRenewingCode] = useState(false)
+  const [platformOwner, setPlatformOwner] = useState(false)
   const [admin, setAdmin] = useState(false)
   const [ready, setReady] = useState(false)
   const [values, setValues] = useState<Record<string, string>>({})
@@ -203,9 +204,12 @@ export default function SettingsPage() {
   async function load(refreshTeam = true) {
     const me = await fetch('/api/auth/me').then((response) => response.json())
     setAdmin(Boolean(me.isAdmin))
+    setPlatformOwner(Boolean(me.isSuperAdmin))
     setCurrentUserId(me.userId || 0)
     setDisplayName(me.displayName || '')
-    const response = await fetch(me.isAdmin ? '/api/admin/settings' : '/api/user/settings?allTts=1')
+    const response = await fetch(
+      me.isSuperAdmin ? '/api/admin/settings' : '/api/user/settings?allTts=1'
+    )
     if (!response.ok) {
       setMessage('请先登录')
       setReady(true)
@@ -241,7 +245,7 @@ export default function SettingsPage() {
 
   async function save() {
     setMessage('保存中…')
-    const response = await fetch(admin ? '/api/admin/settings' : '/api/user/settings', {
+    const response = await fetch(platformOwner ? '/api/admin/settings' : '/api/user/settings', {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(values),
@@ -265,7 +269,7 @@ export default function SettingsPage() {
     const key = capability === 'llm' ? 'API_LLM_ENABLED' : 'API_TTS_ENABLED'
     setSavingToggle(capability)
     try {
-      const response = await fetch(admin ? '/api/admin/settings' : '/api/user/settings', {
+      const response = await fetch(platformOwner ? '/api/admin/settings' : '/api/user/settings', {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ [key]: next ? '1' : '0' }),
@@ -564,7 +568,7 @@ export default function SettingsPage() {
 
       <section className="ys-sheet flex flex-col gap-5 p-5 sm:p-6">
         <SectionHeading
-          title={admin ? '全局 API' : '我的私有 API'}
+          title={platformOwner ? '全局 API' : '我的私有 API'}
           description={
             admin
               ? '停用后，你和获得共享授权的成员都不会使用这类全局 API；各成员自己的密钥不受影响。'

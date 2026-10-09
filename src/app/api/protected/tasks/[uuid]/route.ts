@@ -56,11 +56,11 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ u
     if (valid.length !== new Set(sharedTeamIds).size)
       return NextResponse.json({ error: '团队不存在或已停用' }, { status: 400 })
   }
-  if (visibility !== 'private' && visibility !== 'team') {
+  if (!['private', 'team', 'public'].includes(visibility)) {
     return NextResponse.json({ error: '共享范围无效' }, { status: 400 })
   }
-  if (visibility === 'team' && task.status !== TaskStatus.Success) {
-    return NextResponse.json({ error: '节目完成后才能共享给团队' }, { status: 409 })
+  if (visibility !== 'private' && task.status !== TaskStatus.Success) {
+    return NextResponse.json({ error: '节目完成后才能共享' }, { status: 409 })
   }
   if (!isValidFolderPath(folderPath)) {
     return NextResponse.json({ error: '目录格式须为 /目录/子目录/' }, { status: 400 })

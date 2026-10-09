@@ -16,7 +16,7 @@ const requestFor = (body: unknown) => ({ json: async () => body }) as Parameters
 describe('administrator API settings', () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    mockGetCurrentUser.mockResolvedValue({ isAdmin: true })
+    mockGetCurrentUser.mockResolvedValue({ isAdmin: true, isSuperAdmin: true })
     mockGetSettings.mockResolvedValue({ LLM_CHAT_URL: 'https://api.openai.com/v1', LLM_CHAT_MODEL: 'test',
       LLM_API_KEY: 'private-key', LLM_SEARCH_URL: '' })
   })

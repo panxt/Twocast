@@ -12,11 +12,12 @@ import {
 import { getCurrentUser, sha256 } from '@/utils/user'
 
 export async function GET() {
-  if (!(await getCurrentUser()).isAdmin)
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const viewer = await getCurrentUser()
+  if (!viewer.isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const codes = await getDb()
     .select({
       id: inviteCodesTable.id,
+      accountRole: inviteCodesTable.accountRole,
       label: inviteCodesTable.label,
       maxUses: inviteCodesTable.maxUses,
       usedCount: inviteCodesTable.usedCount,
@@ -28,12 +29,13 @@ export async function GET() {
       createdAt: inviteCodesTable.createdAt,
     })
     .from(inviteCodesTable)
+    .where(viewer.isSuperAdmin ? undefined : eq(inviteCodesTable.accountRole, 'member'))
   return NextResponse.json({ codes })
 }
 
 export async function POST(request: NextRequest) {
-  if (!(await getCurrentUser()).isAdmin)
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const viewer = await getCurrentUser()
+  if (!viewer.isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const input = await request.json().catch(() => null)
   const maxUses = Number(input?.maxUses ?? 1)
   const dailyMaxUses =
@@ -68,13 +70,20 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  if (!(await getCurrentUser()).isAdmin)
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const viewer = await getCurrentUser()
+  if (!viewer.isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const id = Number(request.nextUrl.searchParams.get('id'))
   if (!Number.isInteger(id) || id < 1) {
     return NextResponse.json({ error: '邀请码 ID 无效' }, { status: 400 })
   }
   const db = getDb()
+  const [target] = await db
+    .select()
+    .from(inviteCodesTable)
+    .where(eq(inviteCodesTable.id, id))
+    .limit(1)
+  if (target?.accountRole === 'admin' && !viewer.isSuperAdmin)
+    return NextResponse.json({ error: '无权管理管理员内测码' }, { status: 403 })
   if (request.nextUrl.searchParams.get('remove') === '1') {
     const members = await db
       .select({ id: sessionsTable.id })
@@ -102,8 +111,8 @@ export async function DELETE(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  if (!(await getCurrentUser()).isAdmin)
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const viewer = await getCurrentUser()
+  if (!viewer.isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const input = await request.json().catch(() => null)
   const id = Number(input?.id)
   const maxUses = Number(input?.maxUses)
@@ -130,6 +139,8 @@ export async function PATCH(request: NextRequest) {
     .from(inviteCodesTable)
     .where(eq(inviteCodesTable.id, id))
     .limit(1)
+  if (current?.accountRole === 'admin' && !viewer.isSuperAdmin)
+    return NextResponse.json({ error: '无权管理管理员内测码' }, { status: 403 })
   if (!current) return NextResponse.json({ error: '邀请码不存在' }, { status: 404 })
   if (maxUses < current.usedCount)
     return NextResponse.json({ error: '使用上限不能低于已使用次数' }, { status: 400 })

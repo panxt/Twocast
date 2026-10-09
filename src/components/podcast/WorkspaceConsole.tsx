@@ -1,6 +1,7 @@
 'use client'
 import { SHARE_CAPABILITIES, CAPABILITY_LABELS } from '@/lib/api-capabilities'
 import PrivateApiPanel from './PrivateApiPanel'
+import AccountManagement from './AccountManagement'
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -15,6 +16,7 @@ type Policy = {
   storageBytes: number | null
 }
 type Invite = {
+  accountRole: string
   id: number
   label: string
   maxUses: number
@@ -69,6 +71,8 @@ export default function WorkspaceConsole() {
   const [teams, setTeams] = useState<Team[]>([])
   const [members, setMembers] = useState<Member[]>([])
   const [users, setUsers] = useState<{ id: number; displayName: string | null }[]>([])
+  const [superAdmin, setSuperAdmin] = useState(false)
+  const [inviteRole, setInviteRole] = useState('member')
   const [admin, setAdmin] = useState(false)
   const [teamAdmins, setTeamAdmins] = useState<number[]>([])
   const [dashboard, setDashboard] = useState<Dashboard | null>(null)
@@ -99,6 +103,7 @@ export default function WorkspaceConsole() {
       setMembers(teamData.members)
       setUsers(teamData.users)
       setAdmin(teamData.isAdmin)
+      setSuperAdmin(teamData.isSuperAdmin)
       setTeamAdmins(teamData.teamAdminIds)
       setDashboard(dash)
       if (teamData.isAdmin) {
@@ -145,6 +150,7 @@ export default function WorkspaceConsole() {
           ...(admin
             ? [
                 ['invites', '邀请码'],
+                ['accounts', '账号与角色'],
                 ['quotas', '额度管理'],
               ]
             : []),
@@ -176,6 +182,7 @@ export default function WorkspaceConsole() {
             查看范围
             <select className="ys-field" value={scope} onChange={(e) => setScope(e.target.value)}>
               <option value="mine">我的作品</option>
+              <option value="public">公共空间</option>
               <option value="team">可见团队作品</option>
               {admin && <option value="all">全平台</option>}
               {teams
@@ -398,6 +405,7 @@ export default function WorkspaceConsole() {
           {!teams.length && <p>尚未加入团队。</p>}
         </>
       )}
+      {tab === 'accounts' && admin && <AccountManagement />}
       {tab === 'invites' && admin && (
         <>
           <form
@@ -411,6 +419,7 @@ export default function WorkspaceConsole() {
                     id: editingInvite ?? undefined,
                     active: inviteActive,
                     label: inviteLabel,
+                    accountRole: inviteRole,
                     maxUses: inviteLimit,
                     teamIds: inviteTeams,
                   },
@@ -424,6 +433,19 @@ export default function WorkspaceConsole() {
             <h2 className="ys-title text-xl">
               {editingInvite ? `编辑邀请码 #${editingInvite}` : '创建团队邀请码'}
             </h2>
+            {superAdmin && (
+              <label className="block">
+                加入后的角色
+                <select
+                  className="ys-field"
+                  value={inviteRole}
+                  onChange={(e) => setInviteRole(e.target.value)}
+                >
+                  <option value="member">普通成员</option>
+                  <option value="admin">管理员</option>
+                </select>
+              </label>
+            )}
             <label className="block">
               备注
               <input
@@ -477,6 +499,7 @@ export default function WorkspaceConsole() {
                 disabled={busy}
                 onClick={() => {
                   setEditingInvite(c.id)
+                  setInviteRole(c.accountRole || 'member')
                   setInviteLabel(c.label || '')
                   setInviteLimit(c.maxUses)
                   setInviteActive(!c.expiresAt)
@@ -489,7 +512,8 @@ export default function WorkspaceConsole() {
                 编辑
               </button>
               <span className="flex-1">
-                #{c.id} {c.label} · 已兑换 {c.usedCount}/{c.maxUses} ·{' '}
+                #{c.id} {c.label} · {c.accountRole === 'admin' ? '管理员内测码' : '成员邀请码'} ·
+                已兑换 {c.usedCount}/{c.maxUses} ·{' '}
                 {assignments
                   .filter((a) => a.inviteCodeId === c.id)
                   .map((a) => teams.find((t) => t.id === a.teamId)?.name)
@@ -506,6 +530,7 @@ export default function WorkspaceConsole() {
                       {
                         id: c.id,
                         label: c.label || '',
+                        accountRole: c.accountRole,
                         maxUses: c.maxUses,
                         teamIds: assignments
                           .filter((a) => a.inviteCodeId === c.id)
