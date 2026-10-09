@@ -1,5 +1,7 @@
 'use client'
 
+import { getJson } from '@/lib/client-api/get-json'
+
 import { useEffect, useState } from 'react'
 import { useParams, usePathname } from 'next/navigation'
 import { Plus } from 'lucide-react'
@@ -20,8 +22,7 @@ export default function Header() {
 
   useEffect(() => {
     let alive = true
-    fetch('/api/auth/me', { cache: 'no-store' })
-      .then((response) => response.json())
+    getJson('/api/auth/me')
       .then((me) => {
         if (alive) setAuthenticated(Boolean(me.authenticated))
       })

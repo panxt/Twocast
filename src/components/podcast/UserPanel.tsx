@@ -1,5 +1,7 @@
 'use client'
 
+import { getJson } from '@/lib/client-api/get-json'
+
 import { useEffect, useState } from 'react'
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Plus } from 'lucide-react'
@@ -32,7 +34,7 @@ export function UserPanel({
   const drawerOpen = params.get('new') === '1'
   const [refreshTrigger, setRefreshTrigger] = useState(0)
   const [folders, setFolders] = useState<FolderOption[]>([])
-  const isTeamMember = initialList.viewer.isTeamMember || initialList.viewer.isAdmin
+  const isTeamMember = initialList.viewer.hasTeams
   const isAdmin = initialList.viewer.isAdmin
   const usingInitial =
     filters.scope === initialFilters.scope &&
@@ -40,10 +42,7 @@ export function UserPanel({
     filters.status === initialFilters.status
 
   useEffect(() => {
-    fetch(`/api/protected/folders?${new URLSearchParams({ scope: filters.scope })}`, {
-      cache: 'no-store',
-    })
-      .then((response) => (response.ok ? response.json() : { folders: [] }))
+    getJson(`/api/protected/folders?${new URLSearchParams({ scope: filters.scope })}`)
       .then((body) => setFolders(body.folders || []))
       .catch(() => undefined)
   }, [filters.scope, refreshTrigger])
@@ -66,7 +65,7 @@ export function UserPanel({
       : filters.status === 'processing'
         ? '生成中'
         : filters.scope === 'team'
-          ? '团队共享'
+          ? '分组共享'
           : filters.folder
             ? folderLabel(filters.folder)
             : '节目库'
@@ -96,10 +95,10 @@ export function UserPanel({
               onChange={(event) => navigate({ scope: event.target.value })}
               className="ys-field-sm min-h-10 w-auto pr-8"
             >
-              <option value="">{isAdmin ? '所有成员' : '团队与我的'}</option>
+              <option value="">{isAdmin ? '所有成员' : '我的节目'}</option>
               <option value="mine">仅我的</option>
               <option value="public">公共空间</option>
-              {isTeamMember && <option value="team">团队与我的</option>}
+              {isTeamMember && <option value="team">分组与我的</option>}
             </select>
           }
           <select

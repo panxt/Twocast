@@ -1,13 +1,7 @@
 import 'server-only'
 import { and, eq, gt, isNull, or, sql } from 'drizzle-orm'
 import { getDb } from '@/db/db'
-import {
-  apiGrantsTable,
-  memberApiSharesTable,
-  sessionsTable,
-  teamMembersTable,
-  teamsTable,
-} from '@/db/schema'
+import { apiGrantsTable, memberApiSharesTable, sessionsTable } from '@/db/schema'
 import { getSettings, getUserSettings, SettingKey, ApiToggleKey } from './settings'
 import { ApiAccess, ApiSource } from './api-context'
 import { getShareChain } from './member-share-chain'
@@ -100,22 +94,18 @@ async function selectCapability(
     )
     .orderBy(memberApiSharesTable.id)
   for (const share of shares) {
-    const ownerTeams = await getDb()
-      .select({ teamId: teamMembersTable.teamId })
-      .from(teamMembersTable)
-      .innerJoin(teamsTable, eq(teamsTable.id, teamMembersTable.teamId))
-      .where(and(eq(teamMembersTable.userId, share.ownerUserId), eq(teamsTable.active, true)))
-    const recipientTeams = await getDb()
-      .select({ teamId: teamMembersTable.teamId })
-      .from(teamMembersTable)
-      .where(eq(teamMembersTable.userId, user.userId))
-    if (!ownerTeams.some((t) => recipientTeams.some((r) => r.teamId === t.teamId))) continue
     const chain = await getShareChain(share.id)
     if (!chain) continue
     const [owner] = await getDb()
       .select({ id: sessionsTable.id })
       .from(sessionsTable)
-      .where(and(eq(sessionsTable.id, share.ownerUserId), gt(sessionsTable.expiresAt, new Date())))
+      .where(
+        and(
+          eq(sessionsTable.id, share.ownerUserId),
+          eq(sessionsTable.disabled, false),
+          gt(sessionsTable.expiresAt, new Date())
+        )
+      )
       .limit(1)
     if (
       owner &&

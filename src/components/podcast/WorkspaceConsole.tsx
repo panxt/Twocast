@@ -1,8 +1,10 @@
 'use client'
+
+import { getJson } from '@/lib/client-api/get-json'
 import { SHARE_CAPABILITIES, CAPABILITY_LABELS } from '@/lib/api-capabilities'
 import PrivateApiPanel from './PrivateApiPanel'
 import AccountManagement from './AccountManagement'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 type Team = { id: number; name: string; active: boolean }
@@ -41,6 +43,7 @@ type Dashboard = {
   notes: string[]
 }
 async function api(path: string, body?: unknown, method = 'POST') {
+  if (body === undefined) return getJson(path)
   const response = await fetch(
     path,
     body === undefined
@@ -66,14 +69,22 @@ const blankPolicy: Policy = {
   concurrentLimit: 1,
   storageBytes: null,
 }
-export default function WorkspaceConsole() {
+export default function WorkspaceConsole({
+  viewer,
+}: {
+  viewer: { isAdmin: boolean; isSuperAdmin: boolean; teamAdminIds: number[] }
+}) {
   const [tab, setTab] = useState('overview')
+  const [peopleView, setPeopleView] = useState('accounts')
+  const section = tab === 'people' ? peopleView : tab
+  const [loading, setLoading] = useState(false)
+  const loadVersion = useRef(0)
   const [teams, setTeams] = useState<Team[]>([])
   const [members, setMembers] = useState<Member[]>([])
   const [users, setUsers] = useState<{ id: number; displayName: string | null }[]>([])
-  const [superAdmin, setSuperAdmin] = useState(false)
+  const [superAdmin, setSuperAdmin] = useState(viewer.isSuperAdmin)
   const [inviteRole, setInviteRole] = useState('member')
-  const [admin, setAdmin] = useState(false)
+  const [admin, setAdmin] = useState(viewer.isAdmin)
   const [teamAdmins, setTeamAdmins] = useState<number[]>([])
   const [dashboard, setDashboard] = useState<Dashboard | null>(null)
   const [scope, setScope] = useState('mine')
@@ -91,34 +102,45 @@ export default function WorkspaceConsole() {
   const [inviteLimit, setInviteLimit] = useState(10)
   const [newCode, setNewCode] = useState('')
   const load = useCallback(async () => {
+    const version = ++loadVersion.current
+    setLoading(true)
+    setError('')
     try {
-      setError('')
-      const [teamData, dash] = await Promise.all([
-        api('/api/protected/teams'),
-        api(
+      const me = viewer
+      if (version !== loadVersion.current) return
+      setAdmin(Boolean(me.isAdmin))
+      setSuperAdmin(Boolean(me.isSuperAdmin))
+      setTeamAdmins(me.teamAdminIds || [])
+      if (['teams', 'invites', 'quotas', 'imports'].includes(section)) {
+        const teamData = await api('/api/protected/teams')
+        if (version !== loadVersion.current) return
+        setTeams(teamData.teams.filter((t: Team) => t.name !== '原有团队'))
+        setMembers(teamData.members)
+        setUsers(teamData.users)
+        setTeamAdmins(teamData.teamAdminIds)
+      }
+      if (section === 'overview') {
+        const dash = await api(
           `/api/protected/dashboard?scope=${scope.startsWith('team:') ? 'team' : scope}${scope.startsWith('team:') ? `&team=${scope.slice(5)}` : ''}`
-        ),
-      ])
-      setTeams(teamData.teams)
-      setMembers(teamData.members)
-      setUsers(teamData.users)
-      setAdmin(teamData.isAdmin)
-      setSuperAdmin(teamData.isSuperAdmin)
-      setTeamAdmins(teamData.teamAdminIds)
-      setDashboard(dash)
-      if (teamData.isAdmin) {
-        const [q, codes] = await Promise.all([
-          api('/api/admin/quotas'),
-          api('/api/admin/team-invites'),
-        ])
+        )
+        if (version !== loadVersion.current) return
+        setDashboard(dash)
+      } else if (section === 'quotas' && me.isAdmin) {
+        const q = await api('/api/admin/quotas')
+        if (version !== loadVersion.current) return
         setPolicies(q.policies)
+      } else if (section === 'invites' && me.isAdmin) {
+        const codes = await api('/api/admin/team-invites')
+        if (version !== loadVersion.current) return
         setInvites(codes.codes)
         setAssignments(codes.assignments)
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : '加载失败')
+      if (version === loadVersion.current) setError(e instanceof Error ? e.message : '加载失败')
+    } finally {
+      if (version === loadVersion.current) setLoading(false)
     }
-  }, [scope])
+  }, [scope, section, viewer])
   useEffect(() => {
     void load()
   }, [load])
@@ -138,7 +160,7 @@ export default function WorkspaceConsole() {
   return (
     <main className="mx-auto max-w-6xl space-y-6 p-4 sm:p-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="ys-title text-3xl">团队工作台</h1>
+        <h1 className="ys-title text-3xl">管理工作台</h1>
         <button className="ys-btn-sm ys-btn-secondary" onClick={() => void load()}>
           刷新数据
         </button>
@@ -146,11 +168,10 @@ export default function WorkspaceConsole() {
       <nav aria-label="工作台栏目" className="flex flex-wrap gap-2">
         {[
           ['overview', '使用概览'],
-          ['teams', '团队与成员'],
+          ['teams', '权限分组'],
           ...(admin
             ? [
-                ['invites', '邀请码'],
-                ['accounts', '账号与角色'],
+                ['people', '用户与邀请'],
                 ['quotas', '额度管理'],
               ]
             : []),
@@ -175,15 +196,31 @@ export default function WorkspaceConsole() {
           </button>
         </p>
       )}
-      {!dashboard && !error && <p role="status">正在加载工作台…</p>}
-      {tab === 'overview' && dashboard && (
+      {tab === 'people' && admin && (
+        <div className="flex gap-2" aria-label="用户与邀请">
+          {[
+            ['accounts', '用户与角色'],
+            ['invites', '邀请码'],
+          ].map(([id, label]) => (
+            <button
+              key={id}
+              className={`ys-btn-sm ${peopleView === id ? 'ys-btn-primary' : 'ys-btn-secondary'}`}
+              onClick={() => setPeopleView(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+      {loading && !error && <p role="status">正在加载当前栏目…</p>}
+      {section === 'overview' && dashboard && (
         <>
           <label className="flex max-w-sm items-center gap-3">
             查看范围
             <select className="ys-field" value={scope} onChange={(e) => setScope(e.target.value)}>
               <option value="mine">我的作品</option>
               <option value="public">公共空间</option>
-              <option value="team">可见团队作品</option>
+              <option value="team">权限分组作品</option>
               {admin && <option value="all">全平台</option>}
               {teams
                 .filter((t) => t.active)
@@ -291,8 +328,11 @@ export default function WorkspaceConsole() {
           </div>
         </>
       )}
-      {tab === 'teams' && (
+      {section === 'teams' && (
         <>
+          <p className="ys-note text-sm">
+            所有内测成员都能访问公共空间。仅在需要隔离内容时创建权限分组；加入分组不会自动公开私人节目。
+          </p>
           {admin && (
             <form
               className="ys-sheet flex gap-3 p-4"
@@ -405,8 +445,8 @@ export default function WorkspaceConsole() {
           {!teams.length && <p>尚未加入团队。</p>}
         </>
       )}
-      {tab === 'accounts' && admin && <AccountManagement />}
-      {tab === 'invites' && admin && (
+      {section === 'accounts' && admin && <AccountManagement />}
+      {section === 'invites' && admin && (
         <>
           <form
             className="ys-sheet space-y-4 p-5"
@@ -431,7 +471,7 @@ export default function WorkspaceConsole() {
             }}
           >
             <h2 className="ys-title text-xl">
-              {editingInvite ? `编辑邀请码 #${editingInvite}` : '创建团队邀请码'}
+              {editingInvite ? `编辑邀请码 #${editingInvite}` : '创建邀请码'}
             </h2>
             {superAdmin && (
               <label className="block">
@@ -517,7 +557,7 @@ export default function WorkspaceConsole() {
                 {assignments
                   .filter((a) => a.inviteCodeId === c.id)
                   .map((a) => teams.find((t) => t.id === a.teamId)?.name)
-                  .join('、') || '无团队'}
+                  .join('、') || '普通内测（可访问公共空间）'}
                 {c.expiresAt && ' · 已关闭'}
               </span>
               <button
@@ -548,7 +588,7 @@ export default function WorkspaceConsole() {
           ))}
         </>
       )}
-      {tab === 'quotas' && admin && (
+      {section === 'quotas' && admin && (
         <form
           className="ys-sheet space-y-4 p-5"
           onSubmit={(e) => {
@@ -630,10 +670,10 @@ export default function WorkspaceConsole() {
           </button>
         </form>
       )}
-      {tab === 'recycle' && <RecyclePanel busy={busy} run={act} />}
-      {tab === 'shares' && <PrivateApiPanel />}
-      {tab === 'shares' && <ShareQuotaPanel busy={busy} run={act} />}
-      {tab === 'imports' && <ImportPanel busy={busy} run={act} teams={teams} />}
+      {section === 'recycle' && <RecyclePanel busy={busy} run={act} />}
+      {section === 'shares' && <PrivateApiPanel />}
+      {section === 'shares' && <ShareQuotaPanel busy={busy} run={act} />}
+      {section === 'imports' && <ImportPanel busy={busy} run={act} teams={teams} />}
     </main>
   )
 }
@@ -799,7 +839,7 @@ function ShareQuotaPanel({
       .then((d) => setRecipients(d.users))
       .catch((e) => setError(e.message))
     void api('/api/protected/teams')
-      .then((d) => setShareTeams(d.teams.filter((t) => t.active)))
+      .then((d) => setShareTeams(d.teams.filter((t) => t.active && t.name !== '原有团队')))
       .catch(() => undefined)
   }, [])
   return (
@@ -827,7 +867,7 @@ function ShareQuotaPanel({
       >
         <h3 className="font-semibold">分享自己的私有 API</h3>
         <p className="text-xs text-ink-soft">
-          团队分享会为当前成员分别创建授权；额度为每人上限，新加入成员需再次授权。转分享默认关闭。
+          分组分享会为当前成员分别创建授权；额度为每人上限，新加入成员需再次授权。转分享默认关闭。
         </p>
         <select
           className="ys-field"
@@ -836,7 +876,7 @@ function ShareQuotaPanel({
           value={target}
           onChange={(e) => setTarget(e.target.value)}
         >
-          <option value="">选择同团队用户或团队</option>
+          <option value="">选择成员或权限分组</option>
           {recipients.map((u) => (
             <option key={`u${u.id}`} value={`user:${u.id}`}>
               {u.displayName || `用户 #${u.id}`}

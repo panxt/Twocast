@@ -1,7 +1,7 @@
-import { and, desc, eq, gt, or, inArray } from 'drizzle-orm'
+import { and, desc, eq, gt, or } from 'drizzle-orm'
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/db/db'
-import { memberApiSharesTable, sessionsTable, teamMembersTable, teamsTable } from '@/db/schema'
+import { memberApiSharesTable, sessionsTable } from '@/db/schema'
 import { getCurrentUser } from '@/utils/user'
 import { getUserSettings, SettingKey } from '@/lib/settings'
 import { getShareChain } from '@/lib/member-share-chain'
@@ -19,23 +19,10 @@ export async function GET() {
   const user = await getCurrentUser()
   if (!user.userEmail) return NextResponse.json({ error: '请先登录' }, { status: 401 })
   const db = getDb()
-  const peers = user.isSuperAdmin
-    ? []
-    : await db
-        .select({ userId: teamMembersTable.userId })
-        .from(teamMembersTable)
-        .where(inArray(teamMembersTable.teamId, user.teamIds.length ? user.teamIds : [-1]))
   const users = await db
     .select({ id: sessionsTable.id, displayName: sessionsTable.displayName })
     .from(sessionsTable)
-    .where(
-      and(
-        gt(sessionsTable.expiresAt, new Date()),
-        user.isSuperAdmin
-          ? undefined
-          : inArray(sessionsTable.id, peers.length ? peers.map((p) => p.userId) : [-1])
-      )
-    )
+    .where(and(gt(sessionsTable.expiresAt, new Date()), eq(sessionsTable.disabled, false)))
   const shares = await db
     .select()
     .from(memberApiSharesTable)
@@ -80,19 +67,12 @@ export async function POST(request: NextRequest) {
     .where(
       and(
         eq(sessionsTable.id, recipientUserId),
-
+        eq(sessionsTable.disabled, false),
         gt(sessionsTable.expiresAt, new Date())
       )
     )
     .limit(1)
   if (!recipient) return NextResponse.json({ error: '接收成员不存在或已停用' }, { status: 404 })
-  const memberships = await db
-    .select({ teamId: teamMembersTable.teamId })
-    .from(teamMembersTable)
-    .innerJoin(teamsTable, eq(teamsTable.id, teamMembersTable.teamId))
-    .where(and(eq(teamMembersTable.userId, recipientUserId), eq(teamsTable.active, true)))
-  if (!memberships.some((t) => user.teamIds.includes(t.teamId)))
-    return NextResponse.json({ error: 'API 仅可分享给同团队成员' }, { status: 403 })
   let ownerUserId = user.userId
   if (parentShareId !== null) {
     const chain = await getShareChain(parentShareId)
@@ -112,19 +92,13 @@ export async function POST(request: NextRequest) {
     }
     ownerUserId = parent.ownerUserId
   }
-  const ownerTeams = await db
-    .select({ teamId: teamMembersTable.teamId })
-    .from(teamMembersTable)
-    .where(eq(teamMembersTable.userId, ownerUserId))
-  if (!memberships.some((t) => ownerTeams.some((o) => o.teamId === t.teamId)))
-    return NextResponse.json({ error: '接收者须与原 Key 持有人同属团队' }, { status: 403 })
   const [owner] = await db
     .select({ id: sessionsTable.id })
     .from(sessionsTable)
     .where(
       and(
         eq(sessionsTable.id, ownerUserId),
-
+        eq(sessionsTable.disabled, false),
         gt(sessionsTable.expiresAt, new Date())
       )
     )

@@ -74,13 +74,6 @@ type Code = {
   teamAccess: boolean
   expiresAt: string | null
 }
-const chinaToday = () =>
-  new Intl.DateTimeFormat('sv-SE', {
-    timeZone: 'Asia/Shanghai',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date())
 const inviteState = (code: Code) =>
   code.expiresAt && new Date(code.expiresAt).getTime() <= Date.now()
     ? '已关闭'
@@ -115,7 +108,6 @@ export default function SettingsPage() {
   const [loggingOut, setLoggingOut] = useState(false)
   const [renewingCode, setRenewingCode] = useState(false)
   const [platformOwner, setPlatformOwner] = useState(false)
-  const [admin, setAdmin] = useState(false)
   const [ready, setReady] = useState(false)
   const [values, setValues] = useState<Record<string, string>>({})
   const [configured, setConfigured] = useState<Record<string, boolean>>({})
@@ -131,23 +123,7 @@ export default function SettingsPage() {
   > | null>(null)
   const [message, setMessage] = useState('')
   const [displayName, setDisplayName] = useState('')
-  const [inviteCode, setInviteCode] = useState('')
   const [loginCode, setLoginCode] = useState('')
-  const [memberRecovery, setMemberRecovery] = useState<{ userId: number; code: string } | null>(
-    null
-  )
-  const [inviteLabel, setInviteLabel] = useState('')
-  const [inviteTeamAccess, setInviteTeamAccess] = useState(false)
-  const [inviteMaxUses, setInviteMaxUses] = useState(1)
-  const [inviteDailyMaxUses, setInviteDailyMaxUses] = useState<number | ''>('')
-  const [editingInvite, setEditingInvite] = useState<number | null>(null)
-  const [inviteDraft, setInviteDraft] = useState<{
-    label: string
-    maxUses: number
-    dailyMaxUses: number | ''
-    teamAccess: boolean
-    active: boolean
-  }>({ label: '', maxUses: 1, dailyMaxUses: '', teamAccess: false, active: true })
   const [grants, setGrants] = useState<Grant[]>([])
   const [shares, setShares] = useState<ApiShare[]>([])
   const [shareUsers, setShareUsers] = useState<{ id: number; displayName: string | null }[]>([])
@@ -203,7 +179,6 @@ export default function SettingsPage() {
 
   async function load(refreshTeam = true) {
     const me = await fetch('/api/auth/me').then((response) => response.json())
-    setAdmin(Boolean(me.isAdmin))
     setPlatformOwner(Boolean(me.isSuperAdmin))
     setCurrentUserId(me.userId || 0)
     setDisplayName(me.displayName || '')
@@ -285,75 +260,6 @@ export default function SettingsPage() {
       setSavingToggle(null)
     }
   }
-  async function createInvite() {
-    const response = await fetch('/api/admin/invites', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        maxUses: inviteMaxUses,
-        dailyMaxUses: inviteDailyMaxUses || null,
-        label: inviteLabel,
-        teamAccess: inviteTeamAccess,
-      }),
-    })
-    const data = await response.json()
-    setInviteCode(response.ok ? data.code : '')
-    setMessage(response.ok ? '请现在复制邀请码；之后无法再次查看明文。' : data.error || '创建失败')
-    if (response.ok) await loadTeam()
-  }
-  async function closeInvite(id: number) {
-    if (!window.confirm('关闭后，这个邀请码不能再用于加入。已加入的成员仍可登录。')) return
-    const response = await fetch(`/api/admin/invites?id=${id}`, { method: 'DELETE' })
-    const data = await response.json()
-    setMessage(response.ok ? '邀请码已关闭' : data.error || '关闭失败')
-    if (response.ok) await loadTeam()
-  }
-  function editInvite(code: Code) {
-    setEditingInvite(code.id)
-    setInviteDraft({
-      label: code.label || '',
-      maxUses: code.maxUses,
-      dailyMaxUses: code.dailyMaxUses || '',
-      teamAccess: code.teamAccess,
-      active: !code.expiresAt || new Date(code.expiresAt).getTime() > Date.now(),
-    })
-  }
-  async function saveInvite() {
-    const response = await fetch('/api/admin/invites', {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ id: editingInvite, ...inviteDraft }),
-    })
-    const data = await response.json()
-    setMessage(response.ok ? '邀请码已更新' : data.error || '更新失败')
-    if (response.ok) {
-      setEditingInvite(null)
-      await loadTeam()
-    }
-  }
-  async function removeInvite(id: number) {
-    if (!window.confirm('永久删除此邀请码及其共享 API 授权？此操作无法撤销。')) return
-    const response = await fetch(`/api/admin/invites?id=${id}&remove=1`, { method: 'DELETE' })
-    const data = await response.json()
-    setMessage(response.ok ? '邀请码已删除' : data.error || '删除失败')
-    if (response.ok) await loadTeam()
-  }
-  async function removeMember(id: number) {
-    if (
-      !window.confirm('撤销此成员的登录和 API 授权？没有节目的测试账号会被删除；已有节目会保留。')
-    )
-      return
-    const response = await fetch(`/api/admin/members?id=${id}`, { method: 'DELETE' })
-    const data = await response.json()
-    setMessage(
-      response.ok
-        ? data.retainedForTasks
-          ? '成员访问已撤销，节目已保留'
-          : '成员账号已删除'
-        : data.error || '撤销失败'
-    )
-    if (response.ok) await loadTeam()
-  }
   async function revokeOtherAdminSessions() {
     if (!window.confirm('让除当前浏览器之外的所有管理员登录失效？当前管理员会话会保留。')) return
     const response = await fetch('/api/admin/sessions', { method: 'DELETE' })
@@ -391,7 +297,7 @@ export default function SettingsPage() {
         id: share.id,
         active,
         maxEpisodes: shareLimits[share.id],
-        ...(admin || share.ownerUserId === currentUserId ? { allowReshare } : {}),
+        ...(platformOwner || share.ownerUserId === currentUserId ? { allowReshare } : {}),
       }),
     })
     const data = await response.json()
@@ -458,38 +364,6 @@ export default function SettingsPage() {
     setMessage(response.ok ? '已撤销授权' : (await response.json()).error)
     if (response.ok) await loadTeam()
   }
-  async function setTeamAccess(userId: number, teamAccess: boolean) {
-    const response = await fetch('/api/admin/members', {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ userId, teamAccess }),
-    })
-    const data = await response.json()
-    setMessage(
-      response.ok ? (teamAccess ? '已加入团队' : '已改为体验用户') : data.error || '更新失败'
-    )
-    if (response.ok) await loadTeam()
-  }
-  async function resetMemberLoginCode(userId: number) {
-    const member = users.find((item) => item.id === userId)
-    if (
-      !window.confirm(
-        `为「${member?.displayName || `用户 #${userId}`}」生成新登录码？旧登录码会立即失效，请安全地把新码交给本人。`
-      )
-    )
-      return
-    const response = await fetch('/api/admin/members/login-code', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ userId }),
-    })
-    const data = await response.json()
-    setMemberRecovery(response.ok ? { userId, code: data.code } : null)
-    setMessage(
-      response.ok ? '新登录码只显示这一次，请现在保存并交给该成员。' : data.error || '重置失败'
-    )
-  }
-
   const shell = 'mx-auto flex max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-10 lg:py-8'
 
   if (!ready)
@@ -509,7 +383,7 @@ export default function SettingsPage() {
       <header className="flex flex-col gap-1.5">
         <h1 className="ys-title text-2xl sm:text-[28px]">模型与权限设置</h1>
         <p className="max-w-3xl text-sm text-ink-soft">
-          {admin
+          {platformOwner
             ? '全局密钥仅供管理员及明确授权的成员使用。'
             : '你的密钥只保存在服务端，默认仅自己的任务使用；主动分享后，指定成员才能在额度内调用。私有配置优先于共享授权。'}
         </p>
@@ -525,7 +399,7 @@ export default function SettingsPage() {
         </p>
       )}
 
-      {!admin && access && (
+      {!platformOwner && access && (
         <section className="ys-sheet flex flex-col gap-3 p-5">
           <SectionHeading title="当前可用权限" />
           <dl className="grid gap-2 text-sm sm:grid-cols-2">
@@ -549,7 +423,7 @@ export default function SettingsPage() {
         </section>
       )}
 
-      {!admin && (
+      {!platformOwner && (
         <section className="ys-sheet flex flex-wrap items-end gap-3 p-5">
           <label className="flex min-w-[12rem] flex-1 flex-col gap-1.5">
             <span className="ys-label">显示名称</span>
@@ -570,7 +444,7 @@ export default function SettingsPage() {
         <SectionHeading
           title={platformOwner ? '全局 API' : '我的私有 API'}
           description={
-            admin
+            platformOwner
               ? '停用后，你和获得共享授权的成员都不会使用这类全局 API；各成员自己的密钥不受影响。'
               : '可分别停用自己的大模型或语音密钥，密钥会保留；若有管理员共享授权，会自动改用共享额度。'
           }
@@ -637,7 +511,7 @@ export default function SettingsPage() {
                   className="ys-field min-w-0"
                   autoComplete="off"
                 />
-                {!admin && secrets.has(key) && configured[key] && (
+                {!platformOwner && secrets.has(key) && configured[key] && (
                   <button
                     type="button"
                     onClick={() => clearSecret(key)}
@@ -671,7 +545,7 @@ export default function SettingsPage() {
             </button>
           </p>
         )}
-        {!admin && (
+        {!platformOwner && (
           <div className="flex flex-wrap items-end gap-2">
             <label className="flex flex-col gap-1">
               <span className="ys-label">分享来源</span>
@@ -782,7 +656,7 @@ export default function SettingsPage() {
                 )}
                 {share.allowReshare && <span className="ys-tag ml-1">可转分享</span>}
               </span>
-              {(admin ||
+              {(platformOwner ||
                 share.ownerUserId === currentUserId ||
                 share.delegatedByUserId === currentUserId) && (
                 <div className="flex flex-wrap items-center gap-1.5">
@@ -806,7 +680,7 @@ export default function SettingsPage() {
                   >
                     {share.active ? '暂停' : '启用'}
                   </button>
-                  {(admin || share.ownerUserId === currentUserId) && (
+                  {(platformOwner || share.ownerUserId === currentUserId) && (
                     <button
                       onClick={() => updateShare(share, share.active, !share.allowReshare)}
                       className="ys-btn-sm ys-btn-secondary"
@@ -862,7 +736,7 @@ export default function SettingsPage() {
         )}
       </section>
       <a href={getLocalePath(locale, '/workspace')} className="ys-btn ys-btn-secondary">
-        团队、邀请码、额度与仪表盘 → 团队工作台
+        管理用户、邀请码与额度 → 管理工作台
       </a>
       <FeishuLogin bind />
       <UsageGuide resources />
@@ -894,263 +768,6 @@ export default function SettingsPage() {
               </button>
             </p>
           )}
-          <div className="grid gap-6 lg:grid-cols-2">
-            <section className="ys-sheet flex flex-col gap-4 p-5 sm:p-6">
-              <SectionHeading
-                title="邀请码"
-                description="体验用户只能看自己的内容；团队成员还能查看被明确共享到团队的节目。"
-              />
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <input
-                  placeholder="备注，例如：朋友 A"
-                  value={inviteLabel}
-                  onChange={(event) => setInviteLabel(event.target.value)}
-                  className="ys-field min-w-0 flex-1"
-                />
-                <button onClick={createInvite} className="ys-btn ys-btn-primary">
-                  生成邀请码
-                </button>
-              </div>
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-ink-soft">
-                <label className="inline-flex items-center gap-2">
-                  总共可用
-                  <input
-                    type="number"
-                    min="1"
-                    max="1000"
-                    value={inviteMaxUses}
-                    onChange={(event) => setInviteMaxUses(Number(event.target.value))}
-                    className="ys-field-sm w-20"
-                  />
-                  次
-                </label>
-                <label className="inline-flex items-center gap-2">
-                  每日参考
-                  <input
-                    type="number"
-                    min="1"
-                    max="1000"
-                    placeholder="不设"
-                    value={inviteDailyMaxUses}
-                    onChange={(event) =>
-                      setInviteDailyMaxUses(
-                        event.target.value === '' ? '' : Number(event.target.value)
-                      )
-                    }
-                    className="ys-field-sm w-20"
-                  />
-                  次（仅提醒，不阻止兑换）
-                </label>
-                <label className="inline-flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={inviteTeamAccess}
-                    onChange={(event) => setInviteTeamAccess(event.target.checked)}
-                    className="rounded border-rule text-brand focus:ring-focus"
-                  />
-                  将受邀者加入原有团队（多团队请到工作台配置）
-                </label>
-              </div>
-              {inviteCode && <output className="ys-code tracking-wider">{inviteCode}</output>}
-              <div className="divide-y divide-rule rounded-control border border-rule px-3 text-sm">
-                {teamLoading && codes.length === 0 && <EmptyLine>正在加载邀请码…</EmptyLine>}
-                {!teamLoading && !teamError && codes.length === 0 && (
-                  <EmptyLine>还没有邀请码</EmptyLine>
-                )}
-                {codes.map((code) => (
-                  <div key={code.id} className="py-3">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <span className="font-medium text-ink">
-                          {code.label || `邀请码 #${code.id}`}
-                        </span>
-                        <p className="mt-1 text-xs text-ink-soft">
-                          {code.teamAccess ? '团队成员' : '体验用户'}，{inviteState(code)}，总计{' '}
-                          {code.usedCount}/{code.maxUses} 次
-                          {code.dailyMaxUses
-                            ? `，今日 ${code.dailyUsedOn === chinaToday() ? code.dailyUsedCount : 0}/${code.dailyMaxUses} 次（参考）`
-                            : `，今日 ${code.dailyUsedOn === chinaToday() ? code.dailyUsedCount : 0} 次`}
-                        </p>
-                      </div>
-                      <div className="flex gap-1.5">
-                        <button
-                          onClick={() => editInvite(code)}
-                          className="ys-btn-sm ys-btn-secondary"
-                        >
-                          编辑
-                        </button>
-                        <button
-                          onClick={() => closeInvite(code.id)}
-                          className="ys-btn-sm ys-btn-secondary"
-                        >
-                          关闭
-                        </button>
-                        {!users.some((user) => user.inviteCodeId === code.id) && (
-                          <button
-                            onClick={() => removeInvite(code.id)}
-                            className="ys-btn-sm ys-btn-danger"
-                          >
-                            删除
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    {editingInvite === code.id && (
-                      <div className="mt-3 grid gap-3 rounded-control bg-paper p-3 sm:grid-cols-2">
-                        <label className="flex flex-col gap-1">
-                          <span className="ys-label">备注</span>
-                          <input
-                            value={inviteDraft.label}
-                            maxLength={120}
-                            onChange={(event) =>
-                              setInviteDraft({ ...inviteDraft, label: event.target.value })
-                            }
-                            className="ys-field-sm"
-                          />
-                        </label>
-                        <label className="flex flex-col gap-1">
-                          <span className="ys-label">总共最多次数</span>
-                          <input
-                            type="number"
-                            min={code.usedCount || 1}
-                            max={1000}
-                            value={inviteDraft.maxUses}
-                            onChange={(event) =>
-                              setInviteDraft({
-                                ...inviteDraft,
-                                maxUses: Number(event.target.value),
-                              })
-                            }
-                            className="ys-field-sm"
-                          />
-                        </label>
-                        <label className="flex flex-col gap-1">
-                          <span className="ys-label">每日参考次数（不限制兑换）</span>
-                          <input
-                            type="number"
-                            min="1"
-                            max="1000"
-                            placeholder="不设"
-                            value={inviteDraft.dailyMaxUses}
-                            onChange={(event) =>
-                              setInviteDraft({
-                                ...inviteDraft,
-                                dailyMaxUses:
-                                  event.target.value === '' ? '' : Number(event.target.value),
-                              })
-                            }
-                            className="ys-field-sm"
-                          />
-                        </label>
-                        <div className="flex flex-col gap-2 text-xs text-ink">
-                          <label className="inline-flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={inviteDraft.teamAccess}
-                              onChange={(event) =>
-                                setInviteDraft({ ...inviteDraft, teamAccess: event.target.checked })
-                              }
-                              className="rounded border-rule text-brand focus:ring-focus"
-                            />
-                            新加入者加入原有团队
-                          </label>
-                          <label className="inline-flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={inviteDraft.active}
-                              onChange={(event) =>
-                                setInviteDraft({ ...inviteDraft, active: event.target.checked })
-                              }
-                              className="rounded border-rule text-brand focus:ring-focus"
-                            />
-                            允许继续使用
-                          </label>
-                        </div>
-                        <div className="flex gap-2">
-                          <button onClick={saveInvite} className="ys-btn-sm ys-btn-primary">
-                            保存
-                          </button>
-                          <button
-                            onClick={() => setEditingInvite(null)}
-                            className="ys-btn-sm ys-btn-secondary"
-                          >
-                            取消
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </section>
-            <section className="ys-sheet flex flex-col gap-4 p-5 sm:p-6">
-              <SectionHeading
-                title="团队成员"
-                description="旧邀请码和已有账号默认是体验用户；可在这里逐个加入团队。成员仅能管理自己的节目。"
-              />
-              <div className="divide-y divide-rule text-sm">
-                {teamLoading && users.length === 0 && <EmptyLine>正在加载成员…</EmptyLine>}
-                {!teamLoading && !teamError && users.length === 0 && (
-                  <EmptyLine>还没有成员</EmptyLine>
-                )}
-                {users.map((user) => (
-                  <div key={user.id} className="py-3">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <span
-                          aria-hidden="true"
-                          className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-voice-tint text-sm font-bold text-voice-deep"
-                        >
-                          {(user.displayName || '#').slice(0, 1)}
-                        </span>
-                        <div>
-                          <span className="font-medium text-ink">
-                            {user.displayName || `用户 #${user.id}`}
-                          </span>
-                          <p className="mt-0.5 text-xs text-ink-soft">
-                            #{user.id}，
-                            {new Date(user.expiresAt).getTime() <= Date.now()
-                              ? '已撤销'
-                              : user.teamAccess
-                                ? '团队成员'
-                                : '体验用户'}
-                            {user.inviteCodeId
-                              ? `，来自 ${codes.find((code) => code.id === user.inviteCodeId)?.label || `邀请码 #${user.inviteCodeId}`}`
-                              : ''}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        <button
-                          onClick={() => resetMemberLoginCode(user.id)}
-                          className="ys-btn-sm ys-btn-secondary"
-                        >
-                          重置登录码
-                        </button>
-                        <button
-                          onClick={() => setTeamAccess(user.id, !user.teamAccess)}
-                          className="ys-btn-sm ys-btn-secondary"
-                        >
-                          {user.teamAccess ? '移出团队' : '加入团队'}
-                        </button>
-                        <button
-                          onClick={() => removeMember(user.id)}
-                          className="ys-btn-sm ys-btn-danger"
-                        >
-                          撤销访问
-                        </button>
-                      </div>
-                    </div>
-                    {memberRecovery?.userId === user.id && (
-                      <output className="ys-code mt-3 border-warn bg-warn-tint text-xs text-warn-deep">
-                        {memberRecovery.code}
-                      </output>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </section>
-          </div>
           <section className="ys-sheet flex flex-col gap-4 p-5 sm:p-6">
             <SectionHeading
               title="共享 API 授权"
@@ -1171,8 +788,7 @@ export default function SettingsPage() {
                 ))}
                 {codes.map((code) => (
                   <option key={code.id} value={`code:${code.id}`}>
-                    邀请码 #{code.id} {code.label || ''} · {code.teamAccess ? '团队' : '体验'} ·{' '}
-                    {inviteState(code)}
+                    邀请码 #{code.id} {code.label || ''} · {'内测'} · {inviteState(code)}
                   </option>
                 ))}
               </select>

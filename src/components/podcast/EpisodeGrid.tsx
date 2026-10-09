@@ -191,7 +191,7 @@ export function EpisodeGrid({
         const response = await fetch('/api/protected/teams')
         const body = await response.json()
         if (!response.ok) throw new Error(body.error)
-        setTeamOptions(body.teams.filter((t) => t.active))
+        setTeamOptions(body.teams.filter((t) => t.active && t.name !== '原有团队'))
         setSharingScope(task.visibility || 'private')
         setSelectedTeams([])
         setSharing(task)
@@ -386,7 +386,7 @@ export function EpisodeGrid({
                 onChange={(e) => setSharingScope(e.target.value as typeof sharingScope)}
               >
                 <option value="private">仅自己</option>
-                <option value="team">指定团队</option>
+                {teamOptions.length > 0 && <option value="team">指定权限分组</option>}
                 <option value="public">公共空间（所有已登录成员）</option>
               </select>
             </label>

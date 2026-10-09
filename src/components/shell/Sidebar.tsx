@@ -1,5 +1,7 @@
 'use client'
 
+import { getJson } from '@/lib/client-api/get-json'
+
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams, usePathname, useSearchParams } from 'next/navigation'
@@ -18,7 +20,13 @@ import ThemeSwitch from '@/components/theme/ThemeSwitch'
 import type { LocaleTypes } from '@/i18n/settings'
 import { getLocalePath } from '@/utils/locale-util'
 
-type Me = { authenticated: boolean; isAdmin: boolean; isTeamMember: boolean; displayName: string }
+type Me = {
+  authenticated: boolean
+  isAdmin: boolean
+  isTeamMember: boolean
+  hasTeams?: boolean
+  displayName: string
+}
 type FolderOption = { path: string; label: string; depth: number; episodes: number }
 const STORAGE_KEY = 'ys-sidebar-collapsed'
 const WIDTH = { open: 236, collapsed: 68 }
@@ -62,8 +70,7 @@ export default function Sidebar() {
   useEffect(() => {
     if (onEnterCode) return
     let alive = true
-    fetch('/api/auth/me', { cache: 'no-store' })
-      .then((response) => response.json())
+    getJson('/api/auth/me')
       .then((data) => {
         if (alive) setMe(data.authenticated ? data : null)
       })
@@ -79,28 +86,13 @@ export default function Sidebar() {
     if (!me?.authenticated) return
     let alive = true
     const load = () => {
-      fetch(`/api/protected/folders?${new URLSearchParams({ scope })}`, { cache: 'no-store' })
-        .then((response) => (response.ok ? response.json() : { folders: [] }))
+      getJson(`/api/protected/folders?${new URLSearchParams({ scope })}`)
         .then((body) => {
-          if (alive) setFolders(body.folders || [])
-        })
-        .catch(() => undefined)
-      fetch(
-        `/api/protected/get-list?${new URLSearchParams({ page: '1', page_size: '1', status: 'all', search: '', scope, folder: '' })}`,
-        { cache: 'no-store' }
-      )
-        .then((response) => (response.ok ? response.json() : null))
-        .then((body) => {
-          if (alive && body?.data) setTotal(body.data.pagination.total)
-        })
-        .catch(() => undefined)
-      fetch(
-        `/api/protected/get-list?${new URLSearchParams({ page: '1', page_size: '1', status: 'processing', search: '', scope, folder: '' })}`,
-        { cache: 'no-store' }
-      )
-        .then((response) => (response.ok ? response.json() : null))
-        .then((body) => {
-          if (alive && body?.data) setRunning(body.data.pagination.total)
+          if (alive) {
+            setFolders(body.folders || [])
+            setTotal(body.total ?? null)
+            setRunning(body.running || 0)
+          }
         })
         .catch(() => undefined)
     }
@@ -155,11 +147,11 @@ export default function Sidebar() {
     {
       key: 'team',
       href: withQuery({ scope: 'team' }),
-      label: '团队共享',
+      label: '分组共享',
       Icon: Users,
       active: onHome && scope === 'team',
       badge: '',
-      show: me.isTeamMember || me.isAdmin,
+      show: Boolean(me.hasTeams),
     },
     {
       key: 'running',
@@ -173,7 +165,7 @@ export default function Sidebar() {
     {
       key: 'workspace',
       href: workspace,
-      label: '团队工作台',
+      label: '管理工作台',
       Icon: Users,
       active: pathname === workspace,
       badge: '',

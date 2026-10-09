@@ -18,7 +18,13 @@ export type EpisodeListViewer = {
 
 export type EpisodeListData = {
   items: TaskVO[]
-  viewer: { userId: number; isAdmin: boolean; isTeamMember: boolean; scope: string }
+  viewer: {
+    userId: number
+    isAdmin: boolean
+    isTeamMember: boolean
+    hasTeams?: boolean
+    scope: string
+  }
   pagination: { total: number; page: number; pageSize: number; totalPages: number }
 }
 
@@ -119,6 +125,7 @@ export async function loadEpisodeList(
       userId: viewer.userId,
       isAdmin: viewer.isAdmin,
       isTeamMember: viewer.isTeamMember,
+      hasTeams: Boolean(viewer.teamIds?.length),
       scope,
     },
     pagination: { total, page, pageSize, totalPages: Math.ceil(total / pageSize) },

@@ -5,5 +5,13 @@ export default async function Page({ params }: { params: Promise<{ locale: strin
   const { locale } = await params
   const user = await getCurrentUser()
   if (!user.userEmail) redirect(`/${locale}/enter-code`)
-  return <WorkspaceConsole />
+  return (
+    <WorkspaceConsole
+      viewer={{
+        isAdmin: user.isAdmin,
+        isSuperAdmin: user.isSuperAdmin,
+        teamAdminIds: user.teamAdminIds,
+      }}
+    />
+  )
 }
