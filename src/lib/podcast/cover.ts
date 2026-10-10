@@ -24,6 +24,8 @@ export async function resolveImageKey(user: Viewer, provider: CoverProvider): Pr
   const key = provider === 'minimax' ? 'MINIMAX_TOKEN' : 'GEMINI_TTS_API_KEY'
   const access = await availableTtsAccess(user, platform)
   if (access.error) throw new Error(`${provider === 'minimax' ? 'MiniMax' : 'Gemini'} 封面 API 不可用：${access.error}`)
+  if (access.source === 'default')
+    throw new Error('平台默认共享仅包含聊天和 MiniMax 配音；AI 封面需配置自己的 API 或获得单独共享授权')
   if (access.source === 'own') return getUserSetting(user.userId, key)
   if (access.source === 'member' && access.ownerUserId) return getUserSetting(access.ownerUserId, key)
   return getSetting(key)

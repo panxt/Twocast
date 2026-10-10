@@ -1,4 +1,4 @@
-import { buildCoverPrompt, generateCover, sniffImageType } from '../cover'
+import { buildCoverPrompt, generateCover, sniffImageType, resolveImageKey } from '../cover'
 import { availableTtsAccess } from '@/lib/api-access'
 import { getSetting } from '@/lib/settings'
 import { storeCover } from '../storage'
@@ -12,6 +12,13 @@ jest.mock('../storage', () => ({ storeCover: jest.fn(), removeCover: jest.fn() }
 jest.mock('../task', () => ({ taskGetStepItem: () => ({ input: { title: '测试节目', outline: '封面测试' } }) }))
 
 describe('episode cover helpers', () => {
+  it('does not expand default speech sharing to paid image generation', async () => {
+    jest.mocked(availableTtsAccess).mockResolvedValue({ source: 'default' })
+    jest.mocked(getSetting).mockClear()
+    await expect(resolveImageKey({ userId: 2, inviteCodeId: null, isAdmin: false }, 'minimax'))
+      .rejects.toThrow('平台默认共享仅包含聊天和 MiniMax 配音')
+    expect(getSetting).not.toHaveBeenCalled()
+  })
   it('recognises real image headers instead of trusting the declared type', () => {
     expect(sniffImageType(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]))).toBe('image/png')
     expect(sniffImageType(Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0]))).toBe('image/jpeg')

@@ -389,7 +389,9 @@ export default function SettingsPage() {
         <h1 className="ys-title text-2xl sm:text-[28px]">模型与权限设置</h1>
         <p className="max-w-3xl text-sm text-ink-soft">
           {platformOwner
-            ? '全局密钥仅供管理员及明确授权的成员使用。'
+            ? defaultShared
+              ? '已开启默认共享：已登录内测成员可使用平台聊天模型和 MiniMax 配音，受全平台生成额度限制。'
+              : '默认共享已关闭；全局密钥仅供超级管理员及单独获授权的成员使用。'
             : '你的密钥只保存在服务端，默认仅自己的任务使用；主动分享后，指定成员才能在额度内调用。私有配置优先于共享授权。'}
         </p>
       </header>
