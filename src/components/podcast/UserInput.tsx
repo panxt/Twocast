@@ -45,6 +45,8 @@ interface UserInputProps {
   onSubmitSuccess?: () => void
   folderPath?: string
   extraFields?: React.ReactNode
+  initialText?: string
+  showBrowserImport?: boolean
 }
 
 const tabIcons: Record<PodcastInputType, React.ComponentType<{ className?: string }>> = {
@@ -55,11 +57,21 @@ const tabIcons: Record<PodcastInputType, React.ComponentType<{ className?: strin
   [PodcastInputType.FrontPage]: Newspaper,
 }
 
-export function UserInput({ onSubmitSuccess, folderPath, extraFields }: UserInputProps) {
+export function UserInput({
+  onSubmitSuccess,
+  folderPath,
+  extraFields,
+  initialText,
+  showBrowserImport = true,
+}: UserInputProps) {
   const locale = (useParams()?.locale || 'zh') as LocaleTypes
   const { t, i18n } = useTranslation(locale, 'podcast')
-  const [drafts, setDrafts] = useState<Partial<Record<PodcastInputType, string>>>({})
-  const [activeTab, setActiveTab] = useState(PodcastInputType.Topic)
+  const [drafts, setDrafts] = useState<Partial<Record<PodcastInputType, string>>>(() =>
+    initialText ? { [PodcastInputType.LongText]: initialText } : {}
+  )
+  const [activeTab, setActiveTab] = useState(
+    initialText ? PodcastInputType.LongText : PodcastInputType.Topic
+  )
   const topic = drafts[activeTab] || ''
   const setTopic = (value: string) => setDrafts((current) => ({ ...current, [activeTab]: value }))
   const [file, setFile] = useState<File | null>(null)
@@ -430,6 +442,18 @@ export function UserInput({ onSubmitSuccess, folderPath, extraFields }: UserInpu
       case PodcastInputType.Link:
         return (
           <div className="flex flex-col gap-3">
+            {showBrowserImport && (
+              <WechatBrowserImport
+                disabled={inputDisabled}
+                onImport={(article) => {
+                  setDrafts((current) => ({
+                    ...current,
+                    [PodcastInputType.LongText]: article.text,
+                  }))
+                  setActiveTab(PodcastInputType.LongText)
+                }}
+              />
+            )}
             <CustomTextarea
               value={topic}
               onChange={setTopic}
@@ -500,10 +524,12 @@ export function UserInput({ onSubmitSuccess, folderPath, extraFields }: UserInpu
       case PodcastInputType.LongText:
         return (
           <div className="flex flex-col gap-3">
-            <WechatBrowserImport
-              disabled={inputDisabled}
-              onImport={(article) => setTopic(article.text)}
-            />
+            {showBrowserImport && (
+              <WechatBrowserImport
+                disabled={inputDisabled}
+                onImport={(article) => setTopic(article.text)}
+              />
+            )}
             <CustomTextarea
               value={topic}
               onChange={setTopic}
@@ -612,6 +638,11 @@ export function UserInput({ onSubmitSuccess, folderPath, extraFields }: UserInpu
         })}
       </div>
 
+      {showBrowserImport && (
+        <Link href="/wechat-import" className="self-start text-sm font-medium text-brand underline">
+          公众号导入并生成播客 →
+        </Link>
+      )}
       {renderInputSection()}
       {activeTab !== PodcastInputType.File && (
         <p

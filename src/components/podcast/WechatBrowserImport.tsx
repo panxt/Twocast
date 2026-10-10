@@ -138,10 +138,10 @@ export function WechatBrowserImport({
                 onImport(preview)
                 setRaw('')
                 setPreview(null)
-                setMessage('全文已填入长文本，请核对正文、选择输出语言，再点击创建播客。')
+                setMessage('全文和原地址已带入播客配置，请选择语言与配音，再创建播客。')
               }}
             >
-              使用完整正文
+              确认正文，进入播客配置
             </button>
           </div>
         )}
