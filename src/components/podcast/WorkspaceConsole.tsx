@@ -21,6 +21,7 @@ type Invite = {
   accountRole: string
   id: number
   label: string
+  initialDisplayName?: string | null
   maxUses: number
   usedCount: number
   expiresAt: string | null
@@ -99,6 +100,7 @@ export default function WorkspaceConsole({
   const [editingInvite, setEditingInvite] = useState<number | null>(null)
   const [inviteActive, setInviteActive] = useState(true)
   const [inviteLabel, setInviteLabel] = useState('')
+  const [inviteName, setInviteName] = useState('')
   const [inviteLimit, setInviteLimit] = useState(10)
   const [newCode, setNewCode] = useState('')
   const load = useCallback(async () => {
@@ -459,6 +461,7 @@ export default function WorkspaceConsole({
                     id: editingInvite ?? undefined,
                     active: inviteActive,
                     label: inviteLabel,
+                    initialDisplayName: inviteName,
                     accountRole: inviteRole,
                     maxUses: inviteLimit,
                     teamIds: inviteTeams,
@@ -487,7 +490,7 @@ export default function WorkspaceConsole({
               </label>
             )}
             <label className="block">
-              备注
+              管理备注（不作为用户姓名）
               <input
                 className="ys-field"
                 maxLength={120}
@@ -496,12 +499,30 @@ export default function WorkspaceConsole({
               />
             </label>
             <label className="block">
+              预设姓名 / 昵称（可选）
+              <input
+                className="ys-field"
+                maxLength={40}
+                placeholder="例如：小林；首次兑换后作为用户显示名称"
+                value={inviteName}
+                onChange={(e) => {
+                  setInviteName(e.target.value)
+                  if (e.target.value.trim()) setInviteLimit(1)
+                }}
+              />
+              <span className="mt-1 block text-sm text-ink-soft">
+                指定名称时仅供一人兑换；用户加入后可自行修改昵称。留空可创建多人通用邀请码。
+                编辑预设名称只影响之后首次加入的用户，不会覆盖已有用户的昵称。
+              </span>
+            </label>
+            <label className="block">
               可兑换人数
               <input
                 className="ys-field"
                 type="number"
                 min={1}
                 max={10000}
+                disabled={Boolean(inviteName.trim())}
                 value={inviteLimit}
                 onChange={(e) => setInviteLimit(Number(e.target.value))}
               />
@@ -541,6 +562,7 @@ export default function WorkspaceConsole({
                   setEditingInvite(c.id)
                   setInviteRole(c.accountRole || 'member')
                   setInviteLabel(c.label || '')
+                  setInviteName(c.initialDisplayName || '')
                   setInviteLimit(c.maxUses)
                   setInviteActive(!c.expiresAt)
                   setInviteTeams(
@@ -553,6 +575,7 @@ export default function WorkspaceConsole({
               </button>
               <span className="flex-1">
                 #{c.id} {c.label} · {c.accountRole === 'admin' ? '管理员内测码' : '成员邀请码'} ·
+                {c.initialDisplayName && ` 预设姓名：${c.initialDisplayName} · `}
                 已兑换 {c.usedCount}/{c.maxUses} ·{' '}
                 {assignments
                   .filter((a) => a.inviteCodeId === c.id)
@@ -570,6 +593,7 @@ export default function WorkspaceConsole({
                       {
                         id: c.id,
                         label: c.label || '',
+                        initialDisplayName: c.initialDisplayName || '',
                         accountRole: c.accountRole,
                         maxUses: c.maxUses,
                         teamIds: assignments

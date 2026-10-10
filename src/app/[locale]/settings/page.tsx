@@ -127,6 +127,7 @@ export default function SettingsPage() {
   > | null>(null)
   const [message, setMessage] = useState('')
   const [displayName, setDisplayName] = useState('')
+  const [savingName, setSavingName] = useState(false)
   const [loginCode, setLoginCode] = useState('')
   const [grants, setGrants] = useState<Grant[]>([])
   const [shares, setShares] = useState<ApiShare[]>([])
@@ -340,12 +341,24 @@ export default function SettingsPage() {
     }
   }
   async function saveProfile() {
-    const response = await fetch('/api/user/profile', {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ displayName }),
-    })
-    setMessage(response.ok ? '昵称已保存' : (await response.json()).error || '保存失败')
+    if (savingName) return
+    setSavingName(true)
+    try {
+      const response = await fetch('/api/user/profile', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ displayName }),
+      })
+      const body = await response.json()
+      if (!response.ok) throw new Error(body.error || '保存失败')
+      setDisplayName(body.displayName)
+      window.dispatchEvent(new CustomEvent('tocast-profile-updated', { detail: body.displayName }))
+      setMessage('昵称已保存')
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '保存失败')
+    } finally {
+      setSavingName(false)
+    }
   }
   async function grant() {
     const [kind, idString] = target.split(':')
@@ -430,22 +443,25 @@ export default function SettingsPage() {
         </section>
       )}
 
-      {!platformOwner && (
-        <section className="ys-sheet flex flex-wrap items-end gap-3 p-5">
-          <label className="flex min-w-[12rem] flex-1 flex-col gap-1.5">
-            <span className="ys-label">显示名称</span>
-            <input
-              value={displayName}
-              onChange={(event) => setDisplayName(event.target.value)}
-              maxLength={40}
-              className="ys-field"
-            />
-          </label>
-          <button onClick={saveProfile} className="ys-btn ys-btn-secondary">
-            保存名称
-          </button>
-        </section>
-      )}
+      <section className="ys-sheet flex flex-wrap items-end gap-3 p-5">
+        <label className="flex min-w-[12rem] flex-1 flex-col gap-1.5">
+          <span className="ys-label">我的姓名 / 昵称</span>
+          <input
+            value={displayName}
+            onChange={(event) => setDisplayName(event.target.value)}
+            maxLength={40}
+            placeholder="填写你希望展示给其他成员的名称"
+            className="ys-field"
+          />
+        </label>
+        <button
+          onClick={saveProfile}
+          disabled={savingName || !displayName.trim()}
+          className="ys-btn ys-btn-secondary"
+        >
+          {savingName ? '保存中…' : '保存昵称'}
+        </button>
+      </section>
 
       <section className="ys-sheet flex flex-col gap-5 p-5 sm:p-6">
         <SectionHeading

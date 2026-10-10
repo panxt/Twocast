@@ -59,6 +59,7 @@ export async function POST(request: NextRequest) {
     })
     return response
   }
+  let initialDisplayName: string | null = null
   if (!admin) {
     const recovered = await db
       .update(sessionsTable)
@@ -114,11 +115,13 @@ export async function POST(request: NextRequest) {
         id: inviteCodesTable.id,
         teamAccess: inviteCodesTable.teamAccess,
         accountRole: inviteCodesTable.accountRole,
+        initialDisplayName: inviteCodesTable.initialDisplayName,
       })
     if (!consumed[0]) {
       return NextResponse.json({ error: '邀请码无效或已用完' }, { status: 403 })
     }
     inviteCodeId = consumed[0].id
+    initialDisplayName = consumed[0].initialDisplayName || null
     teamAccess = consumed[0].teamAccess
     accountRole = consumed[0].accountRole === 'admin' ? 'admin' : 'member'
   }
@@ -129,6 +132,7 @@ export async function POST(request: NextRequest) {
     .values({
       tokenHash: sha256(token),
       inviteCodeId,
+      displayName: initialDisplayName,
       loginCodeHash: loginCode ? sha256(loginCode) : null,
       role: accountRole,
       teamAccess,

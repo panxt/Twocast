@@ -13,6 +13,7 @@ export async function GET() {
         id: inviteCodesTable.id,
         accountRole: inviteCodesTable.accountRole,
         label: inviteCodesTable.label,
+        initialDisplayName: inviteCodesTable.initialDisplayName,
         maxUses: inviteCodesTable.maxUses,
         usedCount: inviteCodesTable.usedCount,
         expiresAt: inviteCodesTable.expiresAt,
@@ -37,6 +38,8 @@ async function save(req: Request, update: boolean) {
     !b ||
     typeof b.label !== 'string' ||
     b.label.length > 120 ||
+    (b.initialDisplayName !== undefined &&
+      (typeof b.initialDisplayName !== 'string' || b.initialDisplayName.trim().length > 40)) ||
     !Number.isInteger(b.maxUses) ||
     b.maxUses < 1 ||
     b.maxUses > 10000 ||
@@ -47,6 +50,12 @@ async function save(req: Request, update: boolean) {
   )
     return Response.json({ error: '邀请码参数无效' }, { status: 400 })
   const role = b.accountRole ?? 'member'
+  const initialDisplayName = b.initialDisplayName?.trim() || null
+  if (initialDisplayName && b.maxUses !== 1)
+    return Response.json(
+      { error: '指定姓名的邀请码仅可兑换一次，请为每个人分别创建' },
+      { status: 400 }
+    )
   if (!['member', 'admin'].includes(role) || (role === 'admin' && !viewer.isSuperAdmin))
     return Response.json({ error: '仅超级管理员可创建管理员内测码' }, { status: 403 })
   const ids = [...new Set<number>(b.teamIds)]
@@ -77,11 +86,15 @@ async function save(req: Request, update: boolean) {
           throw new Error('已兑换的邀请码不能改变账号角色，请在账号管理中调整')
         if (!current || current.usedCount > b.maxUses)
           throw new Error('邀请码不存在，或上限低于已兑换人数')
+        const name =
+          b.initialDisplayName === undefined ? current.initialDisplayName : initialDisplayName
+        if (name && b.maxUses !== 1) throw new Error('指定姓名的邀请码仅可兑换一次')
         await tx
           .update(inviteCodesTable)
           .set({
             accountRole: role,
             label: b.label,
+            initialDisplayName: name,
             maxUses: b.maxUses,
             teamAccess: ids.length > 0,
             expiresAt: b.active ? null : new Date(),
@@ -94,6 +107,7 @@ async function save(req: Request, update: boolean) {
           .values({
             accountRole: role,
             label: b.label,
+            initialDisplayName,
             maxUses: b.maxUses,
             teamAccess: ids.length > 0,
             codeHash: sha256(code),

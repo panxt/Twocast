@@ -84,6 +84,15 @@ export default function Sidebar() {
       alive = false
     }
   }, [onEnterCode, pathname])
+  useEffect(() => {
+    const update = (event: Event) => {
+      const name = (event as CustomEvent<string>).detail
+      if (typeof name === 'string')
+        setMe((current) => (current ? { ...current, displayName: name } : current))
+    }
+    window.addEventListener('tocast-profile-updated', update)
+    return () => window.removeEventListener('tocast-profile-updated', update)
+  }, [])
 
   useEffect(() => {
     if (!me?.authenticated) return

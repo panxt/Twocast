@@ -60,6 +60,7 @@ export const inviteCodesTable = pgTable('invite_codes', {
   id: integer().primaryKey().generatedByDefaultAsIdentity(),
   codeHash: varchar('code_hash', { length: 64 }).notNull().unique(),
   label: varchar('label', { length: 120 }),
+  initialDisplayName: varchar('initial_display_name', { length: 40 }),
   accountRole: varchar('account_role', { length: 16 }).notNull().default('member'),
   maxUses: integer('max_uses').notNull().default(1),
   usedCount: integer('used_count').notNull().default(0),
