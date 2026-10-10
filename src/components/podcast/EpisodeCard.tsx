@@ -154,7 +154,18 @@ export function EpisodeCard({
               className="inline-flex max-w-full items-center gap-1 hover:text-brand"
             >
               <ExternalLink className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              <span className="truncate">查看原文 · {new URL(sourceUrl).hostname}</span>
+              <span className="truncate">原地址 · {new URL(sourceUrl).hostname}</span>
+            </a>
+          )}
+          {sourceUrl && task.status === 'success' && (
+            <a
+              href={`/api/protected/tasks/${encodeURIComponent(task.uuid)}/source-text`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs hover:text-brand"
+            >
+              <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+              提取文字稿
             </a>
           )}
         </div>

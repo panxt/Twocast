@@ -30,7 +30,8 @@ it('uses only native subtitles, sends the key only in headers, and preserves sou
   expect(text).not.toContain('test-secret')
   expect(get.mock.calls[0][1].params).toEqual({
     url: 'https://www.youtube.com/watch?v=abcdefghijk',
-    text: true,
+    text: false,
+    lang: 'en',
     mode: 'native',
   })
   expect(get.mock.calls[0][1].headers).toEqual({ 'x-api-key': 'test-secret' })
@@ -60,4 +61,21 @@ it('never leaks credentials from network errors', async () => {
   get.mockRejectedValue(new Error('test-secret'))
   await expect(supadataTranscript('abcdefghijk', 'test-secret')).rejects.toThrow('连接失败或超时')
   ;(axios.isAxiosError as unknown as jest.Mock).mockReturnValue(false)
+})
+
+it('retains subtitle timing and last covered position', async () => {
+  get.mockResolvedValue({
+    status: 200,
+    data: {
+      lang: 'en',
+      content: [
+        { text: 'Opening speech. '.repeat(8), offset: 0, duration: 1000 },
+        { text: 'Thank you. '.repeat(8), offset: 830000, duration: 4000 },
+      ],
+    },
+  })
+  const text = await supadataTranscript('abcdefghijk', 'test-secret')
+  expect(text).toContain('[13:50] Thank you.')
+  expect(text).toContain('字幕覆盖至：834.00 秒')
+  expect(text).toContain('字幕段数：2')
 })

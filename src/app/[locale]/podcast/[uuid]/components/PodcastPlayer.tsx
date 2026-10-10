@@ -35,6 +35,8 @@ interface PodcastPlayerProps {
   createdAt?: string
   fileUrl?: string
   fileName?: string
+  sourceTextUrl?: string
+  sourceInfo?: { characters: number; language: string | null; coverage: string | null }
   sourceUrl?: string
   coverUrl?: string | null
   canManageCover?: boolean
@@ -61,6 +63,8 @@ export default function PodcastPlayer({
   fileUrl,
   fileName,
   sourceUrl,
+  sourceTextUrl,
+  sourceInfo,
   coverUrl: initialCover,
   canManageCover,
 }: PodcastPlayerProps) {
@@ -257,10 +261,40 @@ export default function PodcastPlayer({
               className="ys-btn ys-btn-secondary min-h-10 max-w-full px-3.5"
             >
               <ExternalLink className="h-4 w-4 shrink-0" aria-hidden="true" />
-              <span className="truncate">查看原文 · {new URL(sourceUrl).hostname}</span>
+              <span className="truncate">原地址 · {new URL(sourceUrl).hostname}</span>
             </a>
           )}
+          {sourceTextUrl && (
+            <>
+              <a
+                href={sourceTextUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ys-btn ys-btn-secondary min-h-10 px-3.5"
+              >
+                <FileText className="h-4 w-4" aria-hidden="true" />
+                查看提取文字稿
+              </a>
+              <a
+                href={`${sourceTextUrl}?download=1`}
+                className="ys-btn ys-btn-secondary min-h-10 px-3.5"
+              >
+                <Download className="h-4 w-4" aria-hidden="true" />
+                下载原文字稿 TXT
+              </a>
+            </>
+          )}
         </div>
+        {sourceInfo && (
+          <p className="text-xs leading-5 text-ink-soft">
+            本期生成使用的来源文字稿：{sourceInfo.characters.toLocaleString()} 字符
+            {sourceInfo.language ? ` · 字幕语言 ${sourceInfo.language}` : ''}。
+            {sourceInfo.coverage
+              ? `字幕时间覆盖至 ${sourceInfo.coverage}，请与原视频结束位置核对；覆盖到结尾不代表每句都无遗漏。`
+              : '这期未保存来源时间戳，无法按时间验证覆盖程度。'}
+            播客是整理改写，时长不等同原视频；提取文字稿与下方生成脚本是不同内容。
+          </p>
+        )}
         {lyricsUrl && (
           <p className="text-xs text-ink-soft">
             网易云等桌面播放器对本地歌曲只认「同目录、同文件名」的
