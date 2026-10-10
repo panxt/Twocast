@@ -32,6 +32,7 @@ export type TaskUserInput = {
   language?: string
   fileName?: string
   fileLocation?: string
+  sourceUrl?: string
   apiAccess?: {
     llm: 'own' | 'member' | 'grant' | 'admin' | 'default'
     tts: 'own' | 'member' | 'grant' | 'admin' | 'default'

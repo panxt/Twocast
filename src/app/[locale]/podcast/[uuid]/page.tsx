@@ -12,6 +12,7 @@ import { canManageTask, canReadTask } from '@/lib/podcast/access';
 import { coverUrlFor } from '@/lib/podcast/cover-url';
 import { getLocalePath } from '@/utils/locale-util';
 import type { LocaleTypes } from '@/i18n/settings';
+import { sourceUrlFor } from '@/lib/podcast/source';
 
 interface PodcastPageProps {
   params: Promise<{
@@ -54,6 +55,7 @@ export default async function PodcastPage({ params }: PodcastPageProps) {
       <PodcastPlayer trackId={uuid} audioUrl={audioUrl} downloadUrl={downloadUrl} title={audioData.title} duration={audioOutput?.duration}
         folderPath={task.folderPath} visibility={task.visibility} createdAt={task.createdAt ? new Date(task.createdAt).toISOString() : undefined}
         fileUrl={fileName ? `/api/protected/tasks/${encodeURIComponent(uuid)}/file` : undefined} fileName={fileName}
+        sourceUrl={sourceUrlFor(task.userInputs)}
         coverUrl={coverUrlFor(uuid, task.coverLocation)} canManageCover={canManageTask(task, user)}
         lyricsUrl={audioOutput?.timedScript?.length ? `/api/podcast/${uuid}/lyrics` : undefined}
         bundleUrl={audioOutput?.timedScript?.length && audioOutput.location.startsWith('supabase:') ? `/api/protected/tasks/${encodeURIComponent(uuid)}/bundle` : undefined} />

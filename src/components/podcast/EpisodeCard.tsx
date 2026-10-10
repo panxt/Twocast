@@ -6,6 +6,7 @@ import { Menu, Transition } from '@headlessui/react'
 import {
   Ellipsis,
   FileText,
+  ExternalLink,
   ImagePlus,
   LoaderCircle,
   Lock,
@@ -19,6 +20,7 @@ import { TaskVO } from '@/lib/client-api/types/TaskVO'
 import { TaskStatus } from '@/types/task'
 import { CoverArt } from './CoverArt'
 import { useCoverActions } from './CoverActions'
+import { sourceUrlFor } from '@/lib/podcast/source'
 
 export const titleOf = (task: TaskVO) =>
   task.result?.title ||
@@ -84,6 +86,7 @@ export function EpisodeCard({
   const failed = task.status === TaskStatus.Failed
   const ready = task.status === TaskStatus.Success
   const cover = useCoverActions(task.uuid, onCoverChanged)
+  const sourceUrl = sourceUrlFor(task.user_inputs)
   const meta = [
     task.owner_name || '成员',
     dateLabel(task.created_at),
@@ -140,6 +143,18 @@ export function EpisodeCard({
             >
               <FileText className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
               <span className="truncate">{task.user_inputs.fileName}</span>
+            </a>
+          )}
+          {sourceUrl && (
+            <a
+              href={sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={sourceUrl}
+              className="inline-flex max-w-full items-center gap-1 hover:text-brand"
+            >
+              <ExternalLink className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <span className="truncate">查看原文 · {new URL(sourceUrl).hostname}</span>
             </a>
           )}
         </div>

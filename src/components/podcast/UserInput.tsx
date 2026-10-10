@@ -31,6 +31,7 @@ import {
 
 import { DOCUMENT_MAX_BYTES, INPUT_MAX_CHARACTERS } from '@/lib/podcast/limits'
 import { UsageGuide } from './UsageGuide'
+import { sourceUrlFor } from '@/lib/podcast/source'
 
 const SPEAKERS_KEY = 'ys-speakers'
 
@@ -338,6 +339,8 @@ export function UserInput({ onSubmitSuccess, folderPath, extraFields }: UserInpu
       formData.append('voice_id_2', speakers === 1 ? voiceId_1 : voiceId_2)
       formData.append('speakers', String(speakers))
       formData.append('language', outputLanguage)
+      const sourceUrl = sourceUrlFor({ type: activeTab, text: topic })
+      if (sourceUrl) formData.append('source_url', sourceUrl)
       if (folderPath && folderPath !== '/') formData.append('folder_path', folderPath)
       if (activeTab == PodcastInputType.File) {
         formData.append('file', file as File)

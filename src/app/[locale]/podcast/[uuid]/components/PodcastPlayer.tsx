@@ -1,7 +1,17 @@
 'use client'
 
 import { useState } from 'react'
-import { Download, FileText, Folder, LoaderCircle, Lock, Pause, Play, Users } from 'lucide-react'
+import {
+  Download,
+  ExternalLink,
+  FileText,
+  Folder,
+  LoaderCircle,
+  Lock,
+  Pause,
+  Play,
+  Users,
+} from 'lucide-react'
 import { useAudioPlayer } from '@/contexts/AudioPlayerContext'
 import { useTranslation } from '@/i18n/client'
 import { useParams } from 'next/navigation'
@@ -25,6 +35,7 @@ interface PodcastPlayerProps {
   createdAt?: string
   fileUrl?: string
   fileName?: string
+  sourceUrl?: string
   coverUrl?: string | null
   canManageCover?: boolean
 }
@@ -49,6 +60,7 @@ export default function PodcastPlayer({
   createdAt,
   fileUrl,
   fileName,
+  sourceUrl,
   coverUrl: initialCover,
   canManageCover,
 }: PodcastPlayerProps) {
@@ -234,6 +246,18 @@ export default function PodcastPlayer({
             <a href={fileUrl} className="ys-btn ys-btn-secondary min-h-10 max-w-full px-3.5">
               <FileText className="h-4 w-4 shrink-0" aria-hidden="true" />
               <span className="truncate">原文件{fileName ? `：${fileName}` : ''}</span>
+            </a>
+          )}
+          {sourceUrl && (
+            <a
+              href={sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={sourceUrl}
+              className="ys-btn ys-btn-secondary min-h-10 max-w-full px-3.5"
+            >
+              <ExternalLink className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <span className="truncate">查看原文 · {new URL(sourceUrl).hostname}</span>
             </a>
           )}
         </div>

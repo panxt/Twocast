@@ -22,6 +22,7 @@ import { generatePodcastWorkflow } from '@/lib/podcast/workflow'
 import { reserveApiAccess, releaseApiGrants } from '@/lib/api-access'
 import { isValidFolderPath } from '@/lib/podcast/folder'
 import { DOCUMENT_MAX_BYTES, DOCUMENT_MAX_PAGES, INPUT_MAX_CHARACTERS } from '@/lib/podcast/limits'
+import { safeSourceUrl, sourceUrlFor } from '@/lib/podcast/source'
 
 export async function POST(req: Request) {
   const user = await getCurrentUser()
@@ -51,6 +52,8 @@ export async function POST(req: Request) {
   const voice_id_2 = speakers === 1 ? formData.get('voice_id_1') : voice_id_2_raw
   const file = formData.get('file')
   const language = formData.get('language')
+  const providedSource = formData.get('source_url')
+  if (providedSource !== null && !safeSourceUrl(providedSource)) return respErr('原文链接无效')
   const folderPath = formData.get('folder_path')
   if (
     folderPath !== null &&
@@ -169,6 +172,7 @@ export async function POST(req: Request) {
       language: language as string,
       fileName,
       fileLocation,
+      sourceUrl: sourceUrlFor({ sourceUrl: providedSource, type, text }),
       apiAccess: reservation.access,
       apiKeyOwners: reservation.keyOwners,
       apiKeyShareIds: reservation.keyShareIds,

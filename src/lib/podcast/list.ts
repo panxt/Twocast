@@ -7,6 +7,7 @@ import { TaskStatus } from '@/types/task'
 import { getTaskStatusHuman } from '@/utils/task'
 import { taskScopeWhere } from './scope'
 import { coverUrlFor } from './cover-url'
+import { sourceUrlFor } from './source'
 
 export type EpisodeListViewer = {
   userId: number
@@ -69,6 +70,11 @@ export async function loadEpisodeList(
       updatedAt: tasksTable.updatedAt,
       ownerName: sessionsTable.displayName,
       fileName: sql<string | null>`${tasksTable.userInputs}::jsonb ->> 'fileName'`,
+      sourceUrl: sql<string | null>`${tasksTable.userInputs}::jsonb ->> 'sourceUrl'`,
+      inputType: sql<string | null>`${tasksTable.userInputs}::jsonb ->> 'type'`,
+      sourceText: sql<
+        string | null
+      >`CASE WHEN ${tasksTable.userInputs}::jsonb ->> 'type' IN ('link', 'long-text') THEN left(${tasksTable.userInputs}::jsonb ->> 'text', 2048) END`,
       inputPreview: sql<string | null>`left(${tasksTable.userInputs}::jsonb ->> 'text', 48)`,
       title: sql<string | null>`${tasksTable.stepsDetail}::jsonb #>> '{audio,input,title}'`,
       audioLocation: sql<
@@ -105,7 +111,15 @@ export async function loadEpisodeList(
       error: task.status === TaskStatus.Failed ? reason?.detail || reason?.msg || null : null,
       status: task.status as TaskStatus,
       status_human: getTaskStatusHuman(task.status as TaskStatus),
-      user_inputs: { fileName: task.fileName, text: task.inputPreview },
+      user_inputs: {
+        fileName: task.fileName,
+        text: task.inputPreview,
+        sourceUrl: sourceUrlFor({
+          sourceUrl: task.sourceUrl,
+          type: task.inputType,
+          text: task.sourceText,
+        }),
+      },
       result: {
         title: task.title,
         audio_url: task.audioLocation
