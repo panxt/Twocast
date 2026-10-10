@@ -62,6 +62,42 @@ export function UserInput({ onSubmitSuccess, folderPath, extraFields }: UserInpu
   const setTopic = (value: string) => setDrafts((current) => ({ ...current, [activeTab]: value }))
   const [file, setFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
+  const [parsingSource, setParsingSource] = useState(false)
+  const [sourcePreview, setSourcePreview] = useState<{ text?: string; error?: string } | null>(null)
+  const sourceRequest = useRef(0)
+  useEffect(() => {
+    sourceRequest.current++
+    setSourcePreview(null)
+    setParsingSource(false)
+  }, [topic, activeTab])
+  useEffect(
+    () => () => {
+      sourceRequest.current++
+    },
+    []
+  )
+  async function previewSource() {
+    if (parsingSource || loading || !topic.trim()) return
+    const requestId = ++sourceRequest.current
+    setParsingSource(true)
+    setSourcePreview(null)
+    try {
+      const response = await fetch('/api/protected/source-preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: topic.trim() }),
+      })
+      const data = await response
+        .json()
+        .catch(() => ({ error: '解析服务暂未返回有效结果，请重试' }))
+      if (requestId === sourceRequest.current)
+        setSourcePreview(response.ok ? { text: data.text } : { error: data.error })
+    } catch {
+      if (requestId === sourceRequest.current) setSourcePreview({ error: '网络连接失败，请重试' })
+    } finally {
+      if (requestId === sourceRequest.current) setParsingSource(false)
+    }
+  }
   const [uploadPercent, setUploadPercent] = useState<number | null>(null)
   const [submitPhase, setSubmitPhase] = useState<'upload' | 'processing'>('processing')
   const [quotaTeam, setQuotaTeam] = useState('')
@@ -358,14 +394,58 @@ export function UserInput({ onSubmitSuccess, folderPath, extraFields }: UserInpu
 
       case PodcastInputType.Link:
         return (
-          <CustomTextarea
-            value={topic}
-            onChange={setTopic}
-            placeholder={t('placeholder.link')}
-            rows={3}
-            disabled={inputDisabled}
-            label="要讲的网页"
-          />
+          <div className="flex flex-col gap-3">
+            <CustomTextarea
+              value={topic}
+              onChange={setTopic}
+              placeholder={t('placeholder.link')}
+              rows={3}
+              disabled={inputDisabled}
+              label="要讲的网页 / 视频 / 音频"
+            />
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <button
+                type="button"
+                onClick={previewSource}
+                disabled={loading || parsingSource || !topic.trim()}
+                className="rounded-control border border-rule px-3 py-2 disabled:opacity-50"
+              >
+                {parsingSource ? '正在读取文字稿…' : '试读视频 / 音频文字稿'}
+              </button>
+              <span className="text-ink-soft">预览不调用大模型或配音，不占生成次数。</span>
+            </div>
+            {sourcePreview?.error && (
+              <p role="alert" className="text-sm text-red-600">
+                {sourcePreview.error}
+              </p>
+            )}
+            {sourcePreview?.text && (
+              <div className="rounded-control border border-rule p-3">
+                <p className="mb-2 text-sm">
+                  已取得 {sourcePreview.text.length.toLocaleString()} 字文字稿；核对后可直接生成。
+                </p>
+                <pre className="max-h-48 overflow-auto whitespace-pre-wrap text-sm text-ink-soft">
+                  {sourcePreview.text.slice(0, 3000)}
+                  {sourcePreview.text.length > 3000
+                    ? '\n…（预览只显示前 3000 字，生成会使用完整文字稿）'
+                    : ''}
+                </pre>
+                <button
+                  type="button"
+                  className="mt-3 rounded-control bg-brand px-3 py-2 text-sm text-brand-on"
+                  onClick={() => {
+                    setDrafts((current) => ({
+                      ...current,
+                      [PodcastInputType.LongText]: sourcePreview.text!,
+                    }))
+                    setActiveTab(PodcastInputType.LongText)
+                  }}
+                >
+                  使用这份文字稿
+                </button>
+              </div>
+            )}
+          </div>
         )
 
       case PodcastInputType.FrontPage:

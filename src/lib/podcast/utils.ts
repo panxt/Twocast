@@ -1,3 +1,6 @@
+import { isBilibiliUrl, extractBilibiliTranscript } from './bilibili'
+import { mediaSite, extractVimeoTranscript, extractAudioPageTranscript } from './media-sites'
+import { youtubeVideoId, extractYoutubeTranscript } from './youtube'
 import { queryChat, parseLLMJson } from "@/utils/xai"
 import axios from "axios"
 import * as cheerio from 'cheerio'
@@ -27,6 +30,13 @@ export async function retry<T>(fn: () => Promise<T>, maxRetries = 3, delay = 300
 }
 
 export async function extractTextFromUrl(url: string) {
+  const videoId = youtubeVideoId(url)
+  if (videoId) return extractYoutubeTranscript(videoId)
+  if (isBilibiliUrl(url)) return extractBilibiliTranscript(url)
+  const site = mediaSite(url)
+  if (site === 'vimeo') return extractVimeoTranscript(url)
+  if (site === 'audio') return extractAudioPageTranscript(url)
+  if (site === 'restricted-video') throw new Error('该视频站点暂未接入公开字幕解析。请复制文字稿到「长文本」或上传 TXT / Markdown，不会使用标题和简介代替视频内容。')
   const resp = await retry(() => getAxiosInstance({ proxy: process.env.PROXY_POOL_URL, throwError: true }).get(url))
   if (resp.status != 200) {
     throw new Error(`Failed to get ${url}, status: ${resp.status}, body: ${resp.data?.slice(0, 100)}`)
