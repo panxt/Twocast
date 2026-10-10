@@ -31,6 +31,7 @@ import {
 
 import { DOCUMENT_MAX_BYTES, INPUT_MAX_CHARACTERS } from '@/lib/podcast/limits'
 import { UsageGuide } from './UsageGuide'
+import { WechatBrowserImport } from './WechatBrowserImport'
 import { isWechatSource, isYoutubeSource, sourceUrlFor } from '@/lib/podcast/source'
 
 const SPEAKERS_KEY = 'ys-speakers'
@@ -498,14 +499,20 @@ export function UserInput({ onSubmitSuccess, folderPath, extraFields }: UserInpu
 
       case PodcastInputType.LongText:
         return (
-          <CustomTextarea
-            value={topic}
-            onChange={setTopic}
-            placeholder={t('placeholder.long_text')}
-            rows={6}
-            disabled={inputDisabled}
-            label="资料正文"
-          />
+          <div className="flex flex-col gap-3">
+            <WechatBrowserImport
+              disabled={inputDisabled}
+              onImport={(article) => setTopic(article.text)}
+            />
+            <CustomTextarea
+              value={topic}
+              onChange={setTopic}
+              placeholder={t('placeholder.long_text')}
+              rows={6}
+              disabled={inputDisabled}
+              label="资料正文"
+            />
+          </div>
         )
 
       case PodcastInputType.File:
