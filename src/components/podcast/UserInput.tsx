@@ -31,7 +31,7 @@ import {
 
 import { DOCUMENT_MAX_BYTES, INPUT_MAX_CHARACTERS } from '@/lib/podcast/limits'
 import { UsageGuide } from './UsageGuide'
-import { sourceUrlFor } from '@/lib/podcast/source'
+import { isYoutubeSource, sourceUrlFor } from '@/lib/podcast/source'
 
 const SPEAKERS_KEY = 'ys-speakers'
 
@@ -331,9 +331,37 @@ export function UserInput({ onSubmitSuccess, folderPath, extraFields }: UserInpu
     setUploadPercent(null)
     setSubmitPhase(activeTab === PodcastInputType.File ? 'upload' : 'processing')
     try {
+      let submissionType = activeTab
+      let submissionText = topic
+      // Validate the transcript before reserving generation quota. Reuse it in
+      // the task so the workflow does not fetch YouTube a second time.
+      if (activeTab === PodcastInputType.Link && isYoutubeSource(topic)) {
+        let transcript = sourcePreview?.text
+        if (!transcript) {
+          setParsingSource(true)
+          const preview = await fetch('/api/protected/source-preview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: topic.trim() }),
+          })
+          const data = await preview
+            .json()
+            .catch(() => ({ error: '字幕服务暂未返回结果，请重试或粘贴文字稿' }))
+          if (!preview.ok || typeof data.text !== 'string' || !data.text.trim()) {
+            const message =
+              data.error ||
+              '未能取得视频文字稿，请复制文字稿到「长文本」后生成；当前尚未占用生成次数。'
+            setSourcePreview({ error: message })
+            throw new Error(message)
+          }
+          transcript = data.text
+        }
+        submissionType = PodcastInputType.LongText
+        submissionText = transcript!
+      }
       const formData = new FormData()
       if (quotaTeam) formData.append('team_id', quotaTeam)
-      formData.append('type', activeTab)
+      formData.append('type', submissionType)
       formData.append('platform', platform)
       formData.append('voice_id_1', voiceId_1)
       formData.append('voice_id_2', speakers === 1 ? voiceId_1 : voiceId_2)
@@ -345,7 +373,7 @@ export function UserInput({ onSubmitSuccess, folderPath, extraFields }: UserInpu
       if (activeTab == PodcastInputType.File) {
         formData.append('file', file as File)
       } else {
-        formData.append('text', topic)
+        formData.append('text', submissionText)
       }
       const response = await apiRequest({
         url: '/api/protected/gen-podcast',
@@ -371,6 +399,7 @@ export function UserInput({ onSubmitSuccess, folderPath, extraFields }: UserInpu
       if (error instanceof Error && !('response' in error)) toast.error(error.message)
     } finally {
       setLoading(false)
+      setParsingSource(false)
       setUploadPercent(null)
     }
   }
@@ -415,7 +444,9 @@ export function UserInput({ onSubmitSuccess, folderPath, extraFields }: UserInpu
               >
                 {parsingSource ? '正在读取文字稿…' : '试读视频 / 音频文字稿'}
               </button>
-              <span className="text-ink-soft">预览不调用大模型或配音，不占生成次数。</span>
+              <span className="text-ink-soft">
+                预览不占生成次数；YouTube 创建前会先检查字幕，再按所选语言生成。
+              </span>
             </div>
             {sourcePreview?.error && (
               <p role="alert" className="text-sm text-red-600">

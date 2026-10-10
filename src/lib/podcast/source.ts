@@ -1,5 +1,25 @@
 import { PodcastInputType } from './types'
 
+export function isYoutubeSource(value: string): boolean {
+  try {
+    return [
+      'youtube.com',
+      'www.youtube.com',
+      'm.youtube.com',
+      'music.youtube.com',
+      'youtu.be',
+      'www.youtube-nocookie.com',
+    ].includes(new URL(value.trim()).hostname)
+  } catch {
+    return false
+  }
+}
+
+export function readableTaskError(value?: string | null): string | null {
+  if (!value) return null
+  return value.replace(/^FatalError:\s*Step\s+"[^"\n]+"\s+failed after \d+ retries:\s*/, '')
+}
+
 export function safeSourceUrl(value: unknown): string | undefined {
   if (typeof value !== 'string' || value.length > 2048) return undefined
   try {

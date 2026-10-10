@@ -1,4 +1,4 @@
-import { safeSourceUrl, sourceUrlFor } from '../source'
+import { isYoutubeSource, readableTaskError, safeSourceUrl, sourceUrlFor } from '../source'
 import { PodcastInputType } from '../types'
 
 it('keeps the full original article URL, including its query', () => {
@@ -41,4 +41,20 @@ it('rejects executable links, credentials, invalid and oversized URLs', () => {
     expect(safeSourceUrl(url)).toBeUndefined()
   }
   expect(sourceUrlFor(null)).toBeUndefined()
+})
+
+it('preflights only real YouTube hosts', () => {
+  expect(isYoutubeSource('https://www.youtube.com/watch?v=tJV-vdbZ388')).toBe(true)
+  expect(isYoutubeSource('https://youtu.be/tJV-vdbZ388')).toBe(true)
+  expect(isYoutubeSource('https://youtube.com.evil.example/watch?v=tJV-vdbZ388')).toBe(false)
+  expect(isYoutubeSource('ordinary text')).toBe(false)
+})
+
+it('shows the underlying workflow error instead of internal step paths', () => {
+  expect(
+    readableTaskError(
+      'FatalError: Step "step//./src/lib/podcast/workflow//prepareInput" failed after 3 retries: 无法取得 YouTube 字幕'
+    )
+  ).toBe('无法取得 YouTube 字幕')
+  expect(readableTaskError('配音额度不足')).toBe('配音额度不足')
 })

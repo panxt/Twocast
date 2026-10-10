@@ -7,7 +7,7 @@ import { TaskStatus } from '@/types/task'
 import { getTaskStatusHuman } from '@/utils/task'
 import { taskScopeWhere } from './scope'
 import { coverUrlFor } from './cover-url'
-import { sourceUrlFor } from './source'
+import { readableTaskError, sourceUrlFor } from './source'
 
 export type EpisodeListViewer = {
   userId: number
@@ -108,7 +108,8 @@ export async function loadEpisodeList(
       labels: task.labels,
       visibility: task.visibility,
       cover_url: coverUrlFor(task.uuid, task.coverLocation),
-      error: task.status === TaskStatus.Failed ? reason?.detail || reason?.msg || null : null,
+      error:
+        task.status === TaskStatus.Failed ? readableTaskError(reason?.detail || reason?.msg) : null,
       status: task.status as TaskStatus,
       status_human: getTaskStatusHuman(task.status as TaskStatus),
       user_inputs: {

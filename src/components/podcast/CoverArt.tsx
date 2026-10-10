@@ -27,7 +27,7 @@ export function CoverArt({ variant, coverUrl, title, duration, progressLabel, pr
   if (variant === 'failed') {
     return <div className={`${base} bg-alert-tint text-alert-deep`}>
       <span className="flex items-center gap-1.5 text-xs font-semibold"><TriangleAlert className="h-3.5 w-3.5" aria-hidden="true" />生成失败</span>
-      <span className="line-clamp-2 text-[13px] leading-snug">{error || '请重试，或换一种资料来源。'}</span>
+      <span title={error || undefined} className="line-clamp-2 text-[13px] leading-snug">{error || '请重试，或换一种资料来源。'}</span>
     </div>
   }
   if (coverUrl) {
