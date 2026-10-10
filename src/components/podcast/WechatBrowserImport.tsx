@@ -10,8 +10,10 @@ import {
 export function WechatBrowserImport({
   disabled,
   onImport,
+  expanded = false,
 }: {
   disabled: boolean
+  expanded?: boolean
   onImport: (article: WechatImport) => void
 }) {
   const link = useRef<HTMLAnchorElement>(null)
@@ -45,8 +47,11 @@ export function WechatBrowserImport({
     }
   }
   return (
-    <details className="bg-canvas rounded-control border border-rule p-3 text-sm">
-      <summary className="cursor-pointer font-semibold">公众号浏览器导入 · 无需安装扩展</summary>
+    <details
+      open={expanded || undefined}
+      className="bg-canvas rounded-control border border-rule p-4 text-sm"
+    >
+      <summary className="cursor-pointer font-semibold">导入公众号文章 · 无需安装扩展</summary>
       <div className="mt-3 flex flex-col gap-3">
         <p className="leading-6 text-ink-soft">
           ① 将下面的「导入到声笺」拖到 Chrome 书签栏。② 在 Chrome

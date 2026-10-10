@@ -1,7 +1,9 @@
 'use client'
 
 import { useState } from 'react'
+import { Menu } from '@headlessui/react'
 import {
+  ChevronDown,
   Download,
   ExternalLink,
   FileText,
@@ -216,96 +218,143 @@ export default function PodcastPlayer({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {bundleUrl && (
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-center gap-2">
             <a
-              href={bundleUrl}
-              className="ys-btn ys-btn-primary min-h-10 px-3.5"
-              title="包含播客目标语言字幕和已保存的源语言文字稿；源字幕使用原视频时间轴"
+              href={bundleUrl || downloadUrl || audioUrl}
+              download={bundleUrl ? undefined : `${title}.mp3`}
+              className="ys-btn ys-btn-primary min-h-10 w-full px-4 sm:w-auto"
+              title={bundleUrl ? '包含 MP3、播客字幕及已保存的源语言文字稿' : '下载播客音频'}
             >
-              <Download className="h-4 w-4" aria-hidden="true" />
-              下载 MP3 + 源/目标字幕
+              <Download className="h-4 w-4 shrink-0" aria-hidden="true" />
+              {bundleUrl ? '下载音频与字幕' : t('download')}
             </a>
-          )}
-          <a
-            href={downloadUrl || audioUrl}
-            download={`${title}.mp3`}
-            className={`ys-btn min-h-10 px-3.5 ${bundleUrl ? 'ys-btn-secondary' : 'ys-btn-primary'}`}
-          >
-            <Download className="h-4 w-4" aria-hidden="true" />
-            {bundleUrl ? '仅 MP3' : t('download')}
-          </a>
-          {lyricsUrl && (
-            <a
-              href={lyricsUrl}
-              download
-              title="同步字幕（.lrc）"
-              className="ys-btn ys-btn-secondary min-h-10 px-3.5"
-            >
-              <FileText className="h-4 w-4" aria-hidden="true" />
-              仅播客字幕 LRC
-            </a>
-          )}
-          {fileUrl && (
-            <a href={fileUrl} className="ys-btn ys-btn-secondary min-h-10 max-w-full px-3.5">
-              <FileText className="h-4 w-4 shrink-0" aria-hidden="true" />
-              <span className="truncate">原文件{fileName ? `：${fileName}` : ''}</span>
-            </a>
-          )}
-          {sourceUrl && (
-            <a
-              href={sourceUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              title={sourceUrl}
-              className="ys-btn ys-btn-secondary min-h-10 max-w-full px-3.5"
-            >
-              <ExternalLink className="h-4 w-4 shrink-0" aria-hidden="true" />
-              <span className="truncate">原地址 · {new URL(sourceUrl).hostname}</span>
-            </a>
-          )}
-          {sourceTextUrl && (
-            <>
-              <a
-                href={sourceTextUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="ys-btn ys-btn-secondary min-h-10 px-3.5"
-              >
-                <FileText className="h-4 w-4" aria-hidden="true" />
-                查看提取文字稿
+            {(bundleUrl || lyricsUrl || sourceTextUrl) && (
+              <Menu as="div" className="relative">
+                <Menu.Button className="ys-btn ys-btn-secondary min-h-10 px-3">
+                  单独下载
+                  <ChevronDown className="h-4 w-4" aria-hidden="true" />
+                </Menu.Button>
+                <Menu.Items className="absolute left-0 top-full z-20 mt-2 w-56 rounded-control border border-rule bg-sheet p-1.5 shadow-lg focus:outline-none sm:left-auto sm:right-0">
+                  <Menu.Item>
+                    {({ active }) => (
+                      <a
+                        href={downloadUrl || audioUrl}
+                        download={`${title}.mp3`}
+                        className={`flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm ${active ? 'bg-paper text-brand' : 'text-ink'}`}
+                      >
+                        <Download className="h-4 w-4" aria-hidden="true" />
+                        音频 MP3
+                      </a>
+                    )}
+                  </Menu.Item>
+                  {lyricsUrl && (
+                    <Menu.Item>
+                      {({ active }) => (
+                        <a
+                          href={lyricsUrl}
+                          download
+                          className={`flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm ${active ? 'bg-paper text-brand' : 'text-ink'}`}
+                        >
+                          <FileText className="h-4 w-4" aria-hidden="true" />
+                          播客字幕 LRC
+                        </a>
+                      )}
+                    </Menu.Item>
+                  )}
+                  {sourceTextUrl && (
+                    <Menu.Item>
+                      {({ active }) => (
+                        <a
+                          href={`${sourceTextUrl}?download=1`}
+                          className={`flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm ${active ? 'bg-paper text-brand' : 'text-ink'}`}
+                        >
+                          <FileText className="h-4 w-4" aria-hidden="true" />
+                          源文字稿 TXT
+                        </a>
+                      )}
+                    </Menu.Item>
+                  )}
+                </Menu.Items>
+              </Menu>
+            )}
+            {lyricsUrl && (
+              <a href="#synchronized-script" className="ys-btn ys-btn-quiet min-h-10 px-3">
+                查看同步脚本
               </a>
-              <a
-                href={`${sourceTextUrl}?download=1`}
-                className="ys-btn ys-btn-secondary min-h-10 px-3.5"
-              >
-                <Download className="h-4 w-4" aria-hidden="true" />
-                下载原文字稿 TXT
-              </a>
-            </>
+            )}
+          </div>
+          {(fileUrl || sourceUrl || sourceTextUrl) && (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-rule pt-3 text-sm">
+              <span className="text-xs font-medium text-ink-soft">资料来源</span>
+              {fileUrl && (
+                <a
+                  href={fileUrl}
+                  className="inline-flex min-h-9 min-w-0 max-w-full items-center gap-1.5 text-brand hover:underline"
+                >
+                  <FileText className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span className="truncate" title={fileName}>
+                    原文件{fileName ? `：${fileName}` : ''}
+                  </span>
+                </a>
+              )}
+              {sourceUrl && (
+                <a
+                  href={sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={sourceUrl}
+                  className="inline-flex min-h-9 max-w-full items-center gap-1.5 text-brand hover:underline"
+                >
+                  <ExternalLink className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span className="truncate">查看原文 · {new URL(sourceUrl).hostname}</span>
+                </a>
+              )}
+              {sourceTextUrl && (
+                <a
+                  href={sourceTextUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-h-9 items-center gap-1.5 text-brand hover:underline"
+                >
+                  <FileText className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  查看提取文字稿
+                </a>
+              )}
+            </div>
           )}
         </div>
-        {sourceInfo && (
-          <p className="text-xs leading-5 text-ink-soft">
-            本期生成使用的来源文字稿：{sourceInfo.characters.toLocaleString()} 字符
-            {sourceInfo.language ? ` · 字幕语言 ${sourceInfo.language}` : ''}。
-            {sourceInfo.coverage
-              ? `字幕时间覆盖至 ${sourceInfo.coverage}，请与原视频结束位置核对；覆盖到结尾不代表每句都无遗漏。`
-              : '这期未保存来源时间戳，无法按时间验证覆盖程度。'}
-            播客是整理改写，时长不等同原视频；提取文字稿与下方生成脚本是不同内容。
-          </p>
-        )}
-        {lyricsUrl && (
-          <p className="text-xs text-ink-soft">
-            打包下载保留源语言全文与播客目标语言字幕。根目录同名 LRC / SRT 对应播客；
-            「源语言-原视频」使用原视频时间轴，没有时间戳时提供 TXT，不会截短原文。
-            两份文本经过改写，不能逐句对齐。支持本地歌词的播放器可加载同名 LRC；MP3 内也已写入 ID3
-            歌词。也可以
-            <a href="#synchronized-script" className="font-medium text-brand underline">
-              在本页边听边看同步脚本
-            </a>
-            。
-          </p>
+        {(sourceInfo || lyricsUrl) && (
+          <details className="rounded-control bg-paper px-3 py-2 text-xs text-ink-soft">
+            <summary className="cursor-pointer py-1 font-medium">
+              文字稿与字幕说明
+              {sourceInfo ? ` · ${sourceInfo.characters.toLocaleString()} 字符` : ''}
+            </summary>
+            <div className="mt-2 flex flex-col gap-2">
+              {sourceInfo && (
+                <p className="text-xs leading-5 text-ink-soft">
+                  本期生成使用的来源文字稿：{sourceInfo.characters.toLocaleString()} 字符
+                  {sourceInfo.language ? ` · 字幕语言 ${sourceInfo.language}` : ''}。
+                  {sourceInfo.coverage
+                    ? `字幕时间覆盖至 ${sourceInfo.coverage}，请与原视频结束位置核对；覆盖到结尾不代表每句都无遗漏。`
+                    : '这期未保存来源时间戳，无法按时间验证覆盖程度。'}
+                  播客是整理改写，时长不等同原视频；提取文字稿与下方生成脚本是不同内容。
+                </p>
+              )}
+              {lyricsUrl && (
+                <p className="text-xs text-ink-soft">
+                  打包下载保留源语言全文与播客目标语言字幕。根目录同名 LRC / SRT 对应播客；
+                  「源语言-原视频」使用原视频时间轴，没有时间戳时提供 TXT，不会截短原文。
+                  两份文本经过改写，不能逐句对齐。支持本地歌词的播放器可加载同名 LRC；MP3 内也已写入
+                  ID3 歌词。也可以
+                  <a href="#synchronized-script" className="font-medium text-brand underline">
+                    在本页边听边看同步脚本
+                  </a>
+                  。
+                </p>
+              )}
+            </div>
+          </details>
         )}
       </div>
     </section>

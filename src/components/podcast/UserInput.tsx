@@ -26,6 +26,7 @@ import {
   LoaderCircle,
   Mic,
   Newspaper,
+  MessageSquare,
   X,
 } from 'lucide-react'
 
@@ -72,8 +73,13 @@ export function UserInput({
   const [activeTab, setActiveTab] = useState(
     initialText ? PodcastInputType.LongText : PodcastInputType.Topic
   )
-  const topic = drafts[activeTab] || ''
-  const setTopic = (value: string) => setDrafts((current) => ({ ...current, [activeTab]: value }))
+  const [wechatMode, setWechatMode] = useState(false)
+  const [wechatText, setWechatText] = useState('')
+  const topic = wechatMode ? wechatText : drafts[activeTab] || ''
+  const setTopic = (value: string) => {
+    if (wechatMode) setWechatText(value)
+    else setDrafts((current) => ({ ...current, [activeTab]: value }))
+  }
   const [file, setFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
   const [parsingSource, setParsingSource] = useState(false)
@@ -175,6 +181,7 @@ export function UserInput({
     { id: PodcastInputType.Link, label: t('tabs.link') },
     { id: PodcastInputType.File, label: t('tabs.upload_file') },
     { id: PodcastInputType.LongText, label: t('tabs.long_text') },
+    ...(showBrowserImport ? [{ id: 'wechat' as const, label: '微信公众号' }] : []),
     ...(process.env.NEXT_PUBLIC_VERCEL_BETA === '1'
       ? []
       : [{ id: PodcastInputType.FrontPage, label: t('tabs.front_page') }]),
@@ -406,7 +413,7 @@ export function UserInput({
       })
       if (response.data?.code !== 0) throw new Error(response.data?.message || '提交失败')
       toast.success('节目已进入队列，稍后在节目库查看进度')
-      setDrafts((current) => ({ ...current, [activeTab]: '' }))
+      setTopic('')
       if (activeTab === PodcastInputType.File) resetFile()
       onSubmitSuccess?.()
     } catch (error) {
@@ -419,13 +426,45 @@ export function UserInput({
     }
   }
 
-  const handleTabChange = (tabId: PodcastInputType) => {
+  const handleTabChange = (tabId: PodcastInputType | 'wechat') => {
     if (loading) return
-    setActiveTab(tabId)
+    setWechatMode(tabId === 'wechat')
+    setActiveTab(tabId === 'wechat' ? PodcastInputType.LongText : tabId)
   }
 
   const renderInputSection = () => {
     const inputDisabled = loading
+    if (wechatMode) {
+      return wechatText ? (
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-control bg-voice-tint p-3 text-sm">
+            <span role="status">正文已导入 · 可直接选择配音并生成</span>
+            <button
+              type="button"
+              disabled={inputDisabled}
+              onClick={() => setWechatText('')}
+              className="font-medium text-brand underline"
+            >
+              换一篇文章
+            </button>
+          </div>
+          <CustomTextarea
+            value={topic}
+            onChange={setTopic}
+            placeholder="文章正文"
+            rows={6}
+            disabled={inputDisabled}
+            label="已导入的文章正文（可编辑）"
+          />
+        </div>
+      ) : (
+        <WechatBrowserImport
+          expanded
+          disabled={inputDisabled}
+          onImport={(article) => setWechatText(article.text)}
+        />
+      )
+    }
     switch (activeTab) {
       case PodcastInputType.Topic:
         return (
@@ -442,18 +481,6 @@ export function UserInput({
       case PodcastInputType.Link:
         return (
           <div className="flex flex-col gap-3">
-            {showBrowserImport && (
-              <WechatBrowserImport
-                disabled={inputDisabled}
-                onImport={(article) => {
-                  setDrafts((current) => ({
-                    ...current,
-                    [PodcastInputType.LongText]: article.text,
-                  }))
-                  setActiveTab(PodcastInputType.LongText)
-                }}
-              />
-            )}
             <CustomTextarea
               value={topic}
               onChange={setTopic}
@@ -524,12 +551,6 @@ export function UserInput({
       case PodcastInputType.LongText:
         return (
           <div className="flex flex-col gap-3">
-            {showBrowserImport && (
-              <WechatBrowserImport
-                disabled={inputDisabled}
-                onImport={(article) => setTopic(article.text)}
-              />
-            )}
             <CustomTextarea
               value={topic}
               onChange={setTopic}
@@ -615,12 +636,12 @@ export function UserInput({
       <div
         role="tablist"
         aria-label="资料来源"
-        className="ys-seg"
-        style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
+        className="ys-seg overflow-x-auto"
+        style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(100px, 1fr))` }}
       >
         {tabs.map((tab) => {
-          const Icon = tabIcons[tab.id]
-          const active = activeTab === tab.id
+          const Icon = tab.id === 'wechat' ? MessageSquare : tabIcons[tab.id]
+          const active = tab.id === 'wechat' ? wechatMode : !wechatMode && activeTab === tab.id
           return (
             <button
               key={tab.id}
@@ -638,11 +659,6 @@ export function UserInput({
         })}
       </div>
 
-      {showBrowserImport && (
-        <Link href="/wechat-import" className="self-start text-sm font-medium text-brand underline">
-          公众号导入并生成播客 →
-        </Link>
-      )}
       {renderInputSection()}
       {activeTab !== PodcastInputType.File && (
         <p
