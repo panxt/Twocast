@@ -31,7 +31,7 @@ import {
 
 import { DOCUMENT_MAX_BYTES, INPUT_MAX_CHARACTERS } from '@/lib/podcast/limits'
 import { UsageGuide } from './UsageGuide'
-import { isYoutubeSource, sourceUrlFor } from '@/lib/podcast/source'
+import { isWechatSource, isYoutubeSource, sourceUrlFor } from '@/lib/podcast/source'
 
 const SPEAKERS_KEY = 'ys-speakers'
 
@@ -333,9 +333,12 @@ export function UserInput({ onSubmitSuccess, folderPath, extraFields }: UserInpu
     try {
       let submissionType = activeTab
       let submissionText = topic
-      // Validate the transcript before reserving generation quota. Reuse it in
-      // the task so the workflow does not fetch YouTube a second time.
-      if (activeTab === PodcastInputType.Link && isYoutubeSource(topic)) {
+      // Validate source text before reserving generation quota. Reuse it in
+      // the task so the workflow does not fetch the source a second time.
+      if (
+        activeTab === PodcastInputType.Link &&
+        (isYoutubeSource(topic) || isWechatSource(topic))
+      ) {
         let transcript = sourcePreview?.text
         if (!transcript) {
           setParsingSource(true)
@@ -346,11 +349,10 @@ export function UserInput({ onSubmitSuccess, folderPath, extraFields }: UserInpu
           })
           const data = await preview
             .json()
-            .catch(() => ({ error: '字幕服务暂未返回结果，请重试或粘贴文字稿' }))
+            .catch(() => ({ error: '正文服务暂未返回结果，请重试或粘贴原文' }))
           if (!preview.ok || typeof data.text !== 'string' || !data.text.trim()) {
             const message =
-              data.error ||
-              '未能取得视频文字稿，请复制文字稿到「长文本」后生成；当前尚未占用生成次数。'
+              data.error || '未能取得正文，请复制原文到「长文本」后生成；当前尚未占用生成次数。'
             setSourcePreview({ error: message })
             throw new Error(message)
           }
@@ -442,10 +444,10 @@ export function UserInput({ onSubmitSuccess, folderPath, extraFields }: UserInpu
                 disabled={loading || parsingSource || !topic.trim()}
                 className="rounded-control border border-rule px-3 py-2 disabled:opacity-50"
               >
-                {parsingSource ? '正在读取文字稿…' : '试读视频 / 音频文字稿'}
+                {parsingSource ? '正在读取正文…' : '试读链接正文 / 文字稿'}
               </button>
               <span className="text-ink-soft">
-                预览不占生成次数；YouTube 创建前会先检查字幕，再按所选语言生成。
+                预览不占生成次数；YouTube 和公众号创建前先检查正文，验证页不会生成。
               </span>
             </div>
             {sourcePreview?.error && (

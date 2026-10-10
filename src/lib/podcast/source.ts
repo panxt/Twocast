@@ -1,5 +1,13 @@
 import { PodcastInputType } from './types'
 
+export function isWechatSource(value: string): boolean {
+  try {
+    return new URL(value.trim()).hostname === 'mp.weixin.qq.com'
+  } catch {
+    return false
+  }
+}
+
 export function isYoutubeSource(value: string): boolean {
   try {
     return [
@@ -42,6 +50,7 @@ export function sourceUrlFor(value?: unknown) {
   if (input?.type === PodcastInputType.Link) return safeSourceUrl(input.text)
   if (input?.type !== PodcastInputType.LongText || typeof input.text !== 'string') return undefined
   const header = input.text.slice(0, 2048)
-  if (!/^(?:YouTube 视频：|B 站视频：|Vimeo 视频：|音频来源：)/.test(header)) return undefined
+  if (!/^(?:YouTube 视频：|B 站视频：|Vimeo 视频：|公众号文章：|音频来源：)/.test(header))
+    return undefined
   return safeSourceUrl(header.match(/^(?:来源：|音频来源：)(https?:\/\/\S+)\s*$/m)?.[1])
 }

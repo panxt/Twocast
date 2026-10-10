@@ -8,6 +8,8 @@ import {
   extractAudioPageTranscript,
 } from '@/lib/podcast/media-sites'
 import { INPUT_MAX_CHARACTERS } from '@/lib/podcast/limits'
+import { isWechatSource } from '@/lib/podcast/source'
+import { extractWechatArticle } from '@/lib/podcast/wechat'
 
 export const runtime = 'nodejs'
 export const maxDuration = 180
@@ -26,6 +28,7 @@ export async function POST(request: NextRequest) {
     const site = mediaSite(url)
     let text: string
     if (id) text = await extractYoutubeTranscript(id)
+    else if (isWechatSource(url)) text = await extractWechatArticle(url)
     else if (isBilibiliUrl(url)) text = await extractBilibiliTranscript(url)
     else if (site === 'vimeo') text = await extractVimeoTranscript(url)
     else if (site === 'audio') text = await extractAudioPageTranscript(url)

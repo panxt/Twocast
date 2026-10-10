@@ -2,6 +2,9 @@ import { POST } from '../route'
 const mockUser = jest.fn()
 const mockExtract = jest.fn()
 jest.mock('@/utils/user', () => ({ getCurrentUser: () => mockUser() }))
+jest.mock('@/lib/podcast/wechat', () => ({
+  extractWechatArticle: (url: string) => mockExtract(url),
+}))
 jest.mock('@/lib/podcast/youtube', () => ({
   youtubeVideoId: (url: string) =>
     new URL(url).hostname === 'www.youtube.com' ? 'abcdefghijk' : null,
@@ -33,6 +36,12 @@ it('previews the full transcript without creating a generation task', async () =
   const response = await POST(request({ url: 'https://www.youtube.com/watch?v=abcdefghijk' }))
   expect(response.status).toBe(200)
   expect(await response.json()).toEqual({ text: '真实字幕 English transcript', characters: 23 })
+})
+it('returns WeChat verification failures without creating generation jobs', async () => {
+  mockExtract.mockRejectedValueOnce(new Error('微信要求完成访问验证，当前未取得文章正文'))
+  const response = await POST(request({ url: 'https://mp.weixin.qq.com/s/example' }))
+  expect(response.status).toBe(422)
+  expect(await response.json()).toEqual({ error: '微信要求完成访问验证，当前未取得文章正文' })
 })
 it('returns actionable parsing failures and rejects oversized text', async () => {
   mockExtract.mockRejectedValueOnce(new Error('请复制文字稿'))

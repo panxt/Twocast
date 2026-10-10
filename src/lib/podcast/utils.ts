@@ -1,6 +1,8 @@
 import { isBilibiliUrl, extractBilibiliTranscript } from './bilibili'
 import { mediaSite, extractVimeoTranscript, extractAudioPageTranscript } from './media-sites'
 import { youtubeVideoId, extractYoutubeTranscript } from './youtube'
+import { isWechatSource } from './source'
+import { extractWechatArticle } from './wechat'
 import { queryChat, parseLLMJson } from "@/utils/xai"
 import axios from "axios"
 import * as cheerio from 'cheerio'
@@ -30,6 +32,7 @@ export async function retry<T>(fn: () => Promise<T>, maxRetries = 3, delay = 300
 }
 
 export async function extractTextFromUrl(url: string) {
+  if (isWechatSource(url)) return extractWechatArticle(url)
   const videoId = youtubeVideoId(url)
   if (videoId) return extractYoutubeTranscript(videoId)
   if (isBilibiliUrl(url)) return extractBilibiliTranscript(url)
