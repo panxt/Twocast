@@ -50,7 +50,9 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid Gemini TTS model' }, { status: 400 })
     }
     if (
-      (key === 'API_LLM_ENABLED' || key === 'API_TTS_ENABLED') &&
+      (key === 'API_LLM_ENABLED' ||
+        key === 'API_TTS_ENABLED' ||
+        key === 'API_DEFAULT_SHARED_ENABLED') &&
       trimmed !== '0' &&
       trimmed !== '1'
     ) {

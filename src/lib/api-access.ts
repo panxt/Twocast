@@ -151,6 +151,17 @@ async function selectCapability(
       return { source: 'grant', error: '管理员共享 API 尚未配置完整' }
     return { source: 'grant', grantId: grant.id }
   }
+  // Default sharing is an explicit owner opt-in, not implied by generation quotas.
+  if (user.userId > 0 && (capability === 'llm' || platform === Platform.Minimax)) {
+    const defaults = await getSettings(['API_DEFAULT_SHARED_ENABLED'])
+    if (defaults.API_DEFAULT_SHARED_ENABLED === '1') {
+      if (!(await enabled(user.userId, capability, false)))
+        return { source: 'default', error: `管理员已停用平台共享${label} API` }
+      if (!(await configured(user.userId, keys, false)))
+        return { source: 'default', error: `平台共享${label} API 尚未配置完整，请联系管理员` }
+      return { source: 'default' }
+    }
+  }
   return {
     source: 'grant',
     error:

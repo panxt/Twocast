@@ -11,7 +11,7 @@ export async function GET() {
     const ret = {
     }
     const access = await availableTtsAccess(user)
-    if (process.env.MINIMAX_ENABLED === '1' || (access.source === 'own' || access.source === 'member') && !access.error) {
+    if (!access.error) {
         const token = access.error ? '' : access.source === 'own'
             ? await getUserSetting(user.userId, 'MINIMAX_TOKEN') : access.source === 'member' && access.ownerUserId
               ? await getUserSetting(access.ownerUserId, 'MINIMAX_TOKEN') : await getSetting('MINIMAX_TOKEN')

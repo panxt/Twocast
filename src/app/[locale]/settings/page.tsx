@@ -88,7 +88,9 @@ const accessText = (access?: { source: string; error?: string }) =>
         ? '使用自己的 API'
         : access.source === 'member'
           ? '使用成员分享额度'
-          : '使用管理员授权额度')
+          : access.source === 'default'
+            ? '使用平台默认共享 API（受平台总额度限制）'
+            : '使用管理员授权额度')
 
 // 设置页的两个小件：分节标题、说明行
 function SectionHeading({ title, description }: { title: string; description?: string }) {
@@ -108,6 +110,8 @@ export default function SettingsPage() {
   const [loggingOut, setLoggingOut] = useState(false)
   const [renewingCode, setRenewingCode] = useState(false)
   const [platformOwner, setPlatformOwner] = useState(false)
+  const [defaultShared, setDefaultShared] = useState(false)
+  const [savingDefaultShared, setSavingDefaultShared] = useState(false)
   const [ready, setReady] = useState(false)
   const [values, setValues] = useState<Record<string, string>>({})
   const [configured, setConfigured] = useState<Record<string, boolean>>({})
@@ -199,6 +203,7 @@ export default function SettingsPage() {
     }
     setValues(next)
     setConfigured(flags)
+    setDefaultShared(data.settings.API_DEFAULT_SHARED_ENABLED === '1')
     setApiEnabled({
       llm: data.settings.API_LLM_ENABLED !== '0',
       tts: data.settings.API_TTS_ENABLED !== '0',
@@ -449,6 +454,46 @@ export default function SettingsPage() {
               : '可分别停用自己的大模型或语音密钥，密钥会保留；若有管理员共享授权，会自动改用共享额度。'
           }
         />
+        {platformOwner && (
+          <div className="rounded-control border border-rule p-4">
+            <div className="flex items-center justify-between gap-3">
+              <strong className="text-sm">所有内测成员默认使用平台 API</strong>
+              <button
+                type="button"
+                disabled={savingDefaultShared}
+                className="ys-btn-sm ys-btn-secondary"
+                onClick={async () => {
+                  setSavingDefaultShared(true)
+                  try {
+                    const response = await fetch('/api/admin/settings', {
+                      method: 'PUT',
+                      headers: { 'content-type': 'application/json' },
+                      body: JSON.stringify({
+                        API_DEFAULT_SHARED_ENABLED: defaultShared ? '0' : '1',
+                      }),
+                    })
+                    if (!response.ok) throw new Error('默认共享设置保存失败')
+                    await load(false)
+                    setMessage('默认共享设置已保存')
+                  } catch (error) {
+                    setMessage(error instanceof Error ? error.message : '保存失败')
+                  } finally {
+                    setSavingDefaultShared(false)
+                  }
+                }}
+              >
+                {savingDefaultShared ? '保存中…' : defaultShared ? '停用默认共享' : '启用默认共享'}
+              </button>
+            </div>
+            <p className="mt-2 text-sm text-ink-soft">
+              当前{defaultShared ? '已开启' : '已关闭'}
+              。开启后，现有及新加入的已登录成员可默认使用平台聊天模型和 MiniMax 配音。 自己的 API
+              完整并启用时优先使用自己的 Key；平台 API
+              必须启用，所有生成任务仍受「额度管理」的个人及全平台上限约束。
+              关闭默认共享不会撤销单独发放的授权；相关调用费用由平台 Key 持有人承担。
+            </p>
+          </div>
+        )}
         <div className="grid gap-3 sm:grid-cols-2">
           {(['llm', 'tts'] as const).map((kind) => (
             <div

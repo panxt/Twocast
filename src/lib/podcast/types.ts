@@ -33,8 +33,8 @@ export type TaskUserInput = {
   fileName?: string
   fileLocation?: string
   apiAccess?: {
-    llm: 'own' | 'member' | 'grant' | 'admin'
-    tts: 'own' | 'member' | 'grant' | 'admin'
+    llm: 'own' | 'member' | 'grant' | 'admin' | 'default'
+    tts: 'own' | 'member' | 'grant' | 'admin' | 'default'
   }
   apiKeyOwners?: { llm?: number; tts?: number }
   apiKeyShareIds?: { llm?: number; tts?: number }

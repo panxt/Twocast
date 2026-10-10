@@ -61,6 +61,8 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: '配置无效' }, { status: 400 })
   const changes: { key: SettingKey; value: string | null }[] = []
   for (const key of Object.keys(input)) {
+    if (key === 'API_DEFAULT_SHARED_ENABLED')
+      return NextResponse.json({ error: '只有超级管理员可管理平台默认共享' }, { status: 403 })
     if (!(SETTING_KEYS as readonly string[]).includes(key))
       return NextResponse.json({ error: '未知配置项' }, { status: 400 })
     const value = input[key]

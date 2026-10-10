@@ -32,6 +32,7 @@ export const SETTING_KEYS = [
   'GEMINI_IMAGE_MODEL',
   'API_LLM_ENABLED',
   'API_TTS_ENABLED',
+  'API_DEFAULT_SHARED_ENABLED',
 ] as const
 export type SettingKey = (typeof SETTING_KEYS)[number]
 export type ApiToggleKey = 'API_LLM_ENABLED' | 'API_TTS_ENABLED'
@@ -196,6 +197,12 @@ export async function getApiSetting(key: SettingKey): Promise<string> {
       throw new Error('成员 API 分享已停用')
     }
     return getUserSetting(ownerId, key)
+  }
+  if (context?.access[capability] === 'default') {
+    if ((await getSetting('API_DEFAULT_SHARED_ENABLED')) !== '1')
+      throw new Error('平台默认 API 共享已停用')
+    if (capability === 'tts' && shareCapability !== TTS_CAPABILITIES[Platform.Minimax])
+      throw new Error('平台默认共享仅支持 MiniMax 配音')
   }
   if (
     context &&

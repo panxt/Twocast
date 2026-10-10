@@ -600,6 +600,8 @@ export default function WorkspaceConsole({
           <p className="text-sm text-ink-soft">
             留空表示不限，0
             表示暂停。个人设置覆盖默认个人额度，同时受平台和所选团队额度约束。失败任务释放次数；删除已完成作品不退还次数。
+            全平台额度是所有用户共用的总上限，并非每人额度。API 默认共享由超级管理员在「设置 → 全局
+            API」单独开启。
           </p>
           <select
             className="ys-field"
