@@ -1,6 +1,12 @@
 import { captionText, playerResponse, youtubeVideoId, extractYoutubeTranscript } from '../youtube'
 import axios from 'axios'
 jest.mock('axios')
+import { youtubeFallback } from '../supadata'
+jest.mock('../supadata')
+beforeEach(() => {
+  jest.clearAllMocks()
+  ;(youtubeFallback as jest.Mock).mockRejectedValue(new Error('请复制显示文字稿'))
+})
 
 describe('YouTube transcript input', () => {
   it('recognizes video links without confusing other hosts', () => {
@@ -73,13 +79,23 @@ describe('YouTube transcript input', () => {
     ;(axios.create as jest.Mock).mockReturnValue({ get })
     expect(await extractYoutubeTranscript('abcdefghijk')).toContain('实际的中文字幕内容')
     expect(get.mock.calls[1][0]).toContain('lang=zh')
+    expect(youtubeFallback).not.toHaveBeenCalled()
   })
   it('rejects title-only pages and empty captions with actionable guidance', async () => {
-    ;(axios.create as jest.Mock).mockReturnValue({
+    (axios.create as jest.Mock).mockReturnValue({
       get: jest.fn().mockResolvedValue({
         data: 'var ytInitialPlayerResponse = {"videoDetails":{"title":"not content"}};',
       }),
     })
     await expect(extractYoutubeTranscript('abcdefghijk')).rejects.toThrow('显示文字稿')
   })
+})
+
+it('falls back only after free extraction fails', async () => {
+  (axios.create as jest.Mock).mockReturnValue({
+    get: jest.fn().mockRejectedValue(new Error('blocked')),
+  })
+  ;(youtubeFallback as jest.Mock).mockResolvedValue('third party transcript')
+  expect(await extractYoutubeTranscript('abcdefghijk')).toBe('third party transcript')
+  expect(youtubeFallback).toHaveBeenCalledTimes(1)
 })

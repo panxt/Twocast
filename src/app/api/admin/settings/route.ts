@@ -3,6 +3,7 @@ import { getCurrentUser } from '@/utils/user'
 import { getSettings, setSetting, SETTING_KEYS, SettingKey } from '@/lib/settings'
 
 const SECRET_KEYS = new Set([
+  'SUPADATA_API_KEY',
   'ELEVENLABS_API_KEY',
   'LLM_API_KEY',
   'LLM_SEARCH_API_KEY',
@@ -51,6 +52,7 @@ export async function PUT(request: NextRequest) {
     }
     if (
       (key === 'API_LLM_ENABLED' ||
+        key === 'SUPADATA_ENABLED' ||
         key === 'API_TTS_ENABLED' ||
         key === 'API_DEFAULT_SHARED_ENABLED') &&
       trimmed !== '0' &&

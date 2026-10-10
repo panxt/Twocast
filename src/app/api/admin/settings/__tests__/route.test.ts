@@ -6,7 +6,16 @@ const mockSetSetting = jest.fn()
 
 jest.mock('@/utils/user', () => ({ getCurrentUser: () => mockGetCurrentUser() }))
 jest.mock('@/lib/settings', () => ({
-  SETTING_KEYS: ['LLM_CHAT_URL', 'LLM_CHAT_MODEL', 'LLM_API_KEY', 'LLM_SEARCH_URL', 'API_LLM_ENABLED', 'API_TTS_ENABLED'],
+  SETTING_KEYS: [
+    'SUPADATA_API_KEY',
+    'SUPADATA_ENABLED',
+    'LLM_CHAT_URL',
+    'LLM_CHAT_MODEL',
+    'LLM_API_KEY',
+    'LLM_SEARCH_URL',
+    'API_LLM_ENABLED',
+    'API_TTS_ENABLED',
+  ],
   getSettings: (...args: unknown[]) => mockGetSettings(...args),
   setSetting: (...args: unknown[]) => mockSetSetting(...args),
 }))
@@ -17,8 +26,12 @@ describe('administrator API settings', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     mockGetCurrentUser.mockResolvedValue({ isAdmin: true, isSuperAdmin: true })
-    mockGetSettings.mockResolvedValue({ LLM_CHAT_URL: 'https://api.openai.com/v1', LLM_CHAT_MODEL: 'test',
-      LLM_API_KEY: 'private-key', LLM_SEARCH_URL: '' })
+    mockGetSettings.mockResolvedValue({
+      LLM_CHAT_URL: 'https://api.openai.com/v1',
+      LLM_CHAT_MODEL: 'test',
+      LLM_API_KEY: 'private-key',
+      LLM_SEARCH_URL: '',
+    })
   })
 
   it('reads settings in one batch without revealing a secret', async () => {
@@ -30,15 +43,18 @@ describe('administrator API settings', () => {
   })
 
   it('accepts an empty optional URL while retaining an empty secret field', async () => {
-    const response = await PUT(requestFor({ LLM_CHAT_URL: 'https://api.openai.com/v1',
-      LLM_SEARCH_URL: '', LLM_API_KEY: '' }))
+    const response = await PUT(
+      requestFor({ LLM_CHAT_URL: 'https://api.openai.com/v1', LLM_SEARCH_URL: '', LLM_API_KEY: '' })
+    )
     expect(response.status).toBe(200)
     expect(mockSetSetting).toHaveBeenCalledWith('LLM_SEARCH_URL', '')
     expect(mockSetSetting).not.toHaveBeenCalledWith('LLM_API_KEY', '')
   })
 
   it('validates every field before writing any setting', async () => {
-    const response = await PUT(requestFor({ LLM_CHAT_MODEL: 'new-model', LLM_CHAT_URL: 'http://unsafe.example' }))
+    const response = await PUT(
+      requestFor({ LLM_CHAT_MODEL: 'new-model', LLM_CHAT_URL: 'http://unsafe.example' })
+    )
     expect(response.status).toBe(400)
     expect(mockSetSetting).not.toHaveBeenCalled()
   })
@@ -48,4 +64,12 @@ describe('administrator API settings', () => {
     expect(response.status).toBe(200)
     expect(mockSetSetting).toHaveBeenCalledWith('API_TTS_ENABLED', '0')
   })
+})
+
+it('masks the subtitle key and validates its enable switch', async () => {
+  mockGetCurrentUser.mockResolvedValue({ isAdmin: true, isSuperAdmin: true })
+  mockGetSettings.mockResolvedValue({ SUPADATA_API_KEY: 'test-secret' })
+  const response = await GET()
+  expect((await response.json()).settings.SUPADATA_API_KEY).toBe(true)
+  expect((await PUT(requestFor({ SUPADATA_ENABLED: 'bad' }))).status).toBe(400)
 })

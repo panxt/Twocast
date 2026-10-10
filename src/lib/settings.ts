@@ -15,6 +15,8 @@ import { TTS_CAPABILITIES } from './api-capabilities'
 import { Platform } from './podcast/types'
 
 export const SETTING_KEYS = [
+  'SUPADATA_API_KEY',
+  'SUPADATA_ENABLED',
   'LLM_CHAT_URL',
   'LLM_CHAT_MODEL',
   'LLM_API_KEY',

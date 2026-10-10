@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { mediaClient, timedLine } from './media-client'
 import { load } from 'cheerio'
+import { youtubeFallback } from './supadata'
 
 const hosts = new Set([
   'youtube.com',
@@ -86,6 +87,15 @@ export function captionText(raw: string, timestamps = false): string {
 }
 
 export async function extractYoutubeTranscript(videoId: string): Promise<string> {
+  if (!/^[\w-]{11}$/.test(videoId)) throw new Error('无效的 YouTube 视频编号')
+  try {
+    return await extractFreeYoutubeTranscript(videoId)
+  } catch {
+    return youtubeFallback(videoId, failure)
+  }
+}
+
+export async function extractFreeYoutubeTranscript(videoId: string): Promise<string> {
   const client = mediaClient()
   try {
     const { data: html } = await client.get(`https://www.youtube.com/watch?v=${videoId}&hl=en`)

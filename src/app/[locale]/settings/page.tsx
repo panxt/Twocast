@@ -8,6 +8,7 @@ import { useParams } from 'next/navigation'
 import { getLocalePath } from '@/utils/locale-util'
 import type { LocaleTypes } from '@/i18n/settings'
 import { MODEL_FIELD_HELP, ModelConfigGuide } from '@/components/podcast/ModelConfigGuide'
+import TranscriptFallbackPanel from '@/components/podcast/TranscriptFallbackPanel'
 import FeishuLogin from '@/components/podcast/FeishuLogin'
 import { UsageGuide } from '@/components/podcast/UsageGuide'
 
@@ -463,6 +464,7 @@ export default function SettingsPage() {
         </button>
       </section>
 
+      {platformOwner && <TranscriptFallbackPanel />}
       <section className="ys-sheet flex flex-col gap-5 p-5 sm:p-6">
         <SectionHeading
           title={platformOwner ? '全局 API' : '我的私有 API'}

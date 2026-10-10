@@ -8,7 +8,16 @@ const mockWhere = jest.fn()
 jest.mock('@/utils/user', () => ({ getCurrentUser: () => mockGetCurrentUser() }))
 jest.mock('@/db/db', () => ({ getDb: () => ({ delete: mockDelete }) }))
 jest.mock('@/lib/settings', () => ({
-  SETTING_KEYS: ['LLM_CHAT_URL', 'LLM_CHAT_MODEL', 'LLM_API_KEY', 'LLM_SEARCH_URL', 'API_LLM_ENABLED', 'API_TTS_ENABLED'],
+  SETTING_KEYS: [
+    'SUPADATA_API_KEY',
+    'SUPADATA_ENABLED',
+    'LLM_CHAT_URL',
+    'LLM_CHAT_MODEL',
+    'LLM_API_KEY',
+    'LLM_SEARCH_URL',
+    'API_LLM_ENABLED',
+    'API_TTS_ENABLED',
+  ],
   getUserSettings: jest.fn(),
   setUserSetting: (...args: unknown[]) => mockSetUserSetting(...args),
 }))
@@ -32,16 +41,24 @@ describe('member API settings', () => {
   })
 
   it('rejects a bad URL without partially saving a valid model', async () => {
-    const response = await PUT(requestFor({ LLM_CHAT_MODEL: 'new-model', LLM_CHAT_URL: 'http://unsafe.example' }))
+    const response = await PUT(
+      requestFor({ LLM_CHAT_MODEL: 'new-model', LLM_CHAT_URL: 'http://unsafe.example' })
+    )
     expect(response.status).toBe(400)
     expect(mockDelete).not.toHaveBeenCalled()
     expect(mockSetUserSetting).not.toHaveBeenCalled()
   })
 
   it('accepts the MiniMax mainland example shown in the configuration guide', async () => {
-    const response = await PUT(requestFor({ LLM_CHAT_URL: 'https://api.minimax.cn/v1/chat/completions' }))
+    const response = await PUT(
+      requestFor({ LLM_CHAT_URL: 'https://api.minimax.cn/v1/chat/completions' })
+    )
     expect(response.status).toBe(200)
-    expect(mockSetUserSetting).toHaveBeenCalledWith(5, 'LLM_CHAT_URL', 'https://api.minimax.cn/v1/chat/completions')
+    expect(mockSetUserSetting).toHaveBeenCalledWith(
+      5,
+      'LLM_CHAT_URL',
+      'https://api.minimax.cn/v1/chat/completions'
+    )
   })
 
   it('allows a member to pause their own LLM key without removing it', async () => {
@@ -56,4 +73,9 @@ describe('member API settings', () => {
     expect(response.status).toBe(400)
     expect(mockSetUserSetting).not.toHaveBeenCalled()
   })
+})
+
+it('does not allow a member to change platform subtitle fallback', async () => {
+  mockGetCurrentUser.mockResolvedValue({ userEmail: 'member', userId: 1 })
+  expect((await PUT(requestFor({ SUPADATA_API_KEY: 'private' }))).status).toBe(403)
 })
