@@ -23,18 +23,18 @@ const entriesFor = (text: string, language = 'Chinese') =>
 it('preserves full source and keeps original and podcast timelines separate', () => {
   const source = '字幕语言：en\n[00:00] Beginning\n[14:55] Thank you.'
   const entries = entriesFor(source)
-  expect(entries.find((e) => e.name === '源语言-原视频/完整文字稿.txt')?.data.toString()).toBe(
+  expect(entries.find((e) => e.name === '源语言-原视频/节目-源文字稿.txt')?.data.toString()).toBe(
     source
   )
-  expect(entries.find((e) => e.name === '源语言-原视频/字幕.lrc')?.data.toString()).toContain(
-    '[14:55.00]'
-  )
+  expect(
+    entries.find((e) => e.name === '源语言-原视频/节目-源字幕.lrc')?.data.toString()
+  ).toContain('[14:55.00]')
   expect(entries.find((e) => e.name === '节目.lrc')?.data.toString()).toContain(
     '[00:02.00]主持人: 中文播客'
   )
-  expect(entries.find((e) => e.name === '目标语言-播客/脚本.txt')?.data.toString()).toContain(
-    'Chinese'
-  )
+  expect(
+    entries.find((e) => e.name === '目标语言-播客/节目-播客脚本.txt')?.data.toString()
+  ).toContain('Chinese')
   expect(entries.find((e) => e.name === '节目.srt')?.data.toString()).toContain('00:04:00,000')
 })
 
@@ -42,13 +42,13 @@ it.each(['English', 'German', 'Chinese'])(
   'records selected target %s without translating or refetching source',
   (language) => {
     const entries = entriesFor('Original English source.', language)
-    expect(entries.find((e) => e.name === '目标语言-播客/脚本.txt')?.data.toString()).toContain(
-      language
-    )
-    expect(entries.find((e) => e.name === '源语言-原视频/完整文字稿.txt')?.data.toString()).toBe(
+    expect(
+      entries.find((e) => e.name === '目标语言-播客/节目-播客脚本.txt')?.data.toString()
+    ).toContain(language)
+    expect(entries.find((e) => e.name === '源语言-原视频/节目-源文字稿.txt')?.data.toString()).toBe(
       'Original English source.'
     )
-    expect(entries.some((e) => e.name === '源语言-原视频/字幕.lrc')).toBe(false)
+    expect(entries.some((e) => e.name === '源语言-原视频/节目-源字幕.lrc')).toBe(false)
   }
 )
 
@@ -56,7 +56,7 @@ it('does not truncate long source or fabricate source for old episodes', () => {
   const source = 'English source '.repeat(10000)
   expect(
     entriesFor(source)
-      .find((e) => e.name === '源语言-原视频/完整文字稿.txt')
+      .find((e) => e.name === '源语言-原视频/节目-源文字稿.txt')
       ?.data.toString()
   ).toBe(source)
   const entries = subtitleBundleEntries(
@@ -66,5 +66,5 @@ it('does not truncate long source or fabricate source for old episodes', () => {
     'old'
   )
   expect(entries.some((e) => e.name.startsWith('源语言'))).toBe(false)
-  expect(entries.find((e) => e.name === '字幕说明.txt')?.data.toString()).toContain('未保存')
+  expect(entries.find((e) => e.name === 'old-字幕说明.txt')?.data.toString()).toContain('未保存')
 })
