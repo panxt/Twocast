@@ -6,8 +6,7 @@ import { taskGetStepItem } from '@/lib/podcast/task'
 import { PodcastStep, type AudioOutput } from '@/lib/podcast/types'
 import { readAudio } from '@/lib/podcast/storage'
 import { safeAudioBasename } from '@/lib/podcast/filename'
-import { toSrt } from '@/lib/podcast/subtitles'
-import { toLrc } from '@/lib/podcast/lyrics'
+import { subtitleBundleEntries } from '@/lib/podcast/subtitle-bundle'
 import { buildStoredZip } from '@/lib/zip'
 import { LongTextResult } from '@/queue/types'
 
@@ -35,11 +34,7 @@ export async function GET(_: Request, context: { params: Promise<{ uuid: string 
   const mp3 = await readAudio(audio.location.slice('supabase:'.length))
   const zip = buildStoredZip([
     { name: `${basename}.mp3`, data: mp3 },
-    {
-      name: `${basename}.srt`,
-      data: Buffer.from(toSrt(audio.timedScript, audio.duration), 'utf8'),
-    },
-    { name: `${basename}.lrc`, data: Buffer.from(toLrc(audio.timedScript, title), 'utf8') },
+    ...subtitleBundleEntries(task, audio, title, basename),
   ])
   // Vercel limits buffered Function responses to 4.5 MB. Stream the archive so
   // ordinary multi-minute episodes can be downloaded without hitting that cap.

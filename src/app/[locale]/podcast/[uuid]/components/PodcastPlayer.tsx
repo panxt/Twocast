@@ -221,10 +221,10 @@ export default function PodcastPlayer({
             <a
               href={bundleUrl}
               className="ys-btn ys-btn-primary min-h-10 px-3.5"
-              title="解压后 MP3 与同名 .lrc 放在同一目录，网易云等本地播放器即可显示字幕"
+              title="包含播客目标语言字幕和已保存的源语言文字稿；源字幕使用原视频时间轴"
             >
               <Download className="h-4 w-4" aria-hidden="true" />
-              下载 MP3 + 字幕
+              下载 MP3 + 源/目标字幕
             </a>
           )}
           <a
@@ -243,7 +243,7 @@ export default function PodcastPlayer({
               className="ys-btn ys-btn-secondary min-h-10 px-3.5"
             >
               <FileText className="h-4 w-4" aria-hidden="true" />
-              仅字幕 LRC
+              仅播客字幕 LRC
             </a>
           )}
           {fileUrl && (
@@ -297,8 +297,10 @@ export default function PodcastPlayer({
         )}
         {lyricsUrl && (
           <p className="text-xs text-ink-soft">
-            网易云等桌面播放器对本地歌曲只认「同目录、同文件名」的
-            .lrc：下载打包版解压后直接导入即可；MP3 内也已写入 ID3 歌词。也可以
+            打包下载保留源语言全文与播客目标语言字幕。根目录同名 LRC / SRT 对应播客；
+            「源语言-原视频」使用原视频时间轴，没有时间戳时提供 TXT，不会截短原文。
+            两份文本经过改写，不能逐句对齐。支持本地歌词的播放器可加载同名 LRC；MP3 内也已写入 ID3
+            歌词。也可以
             <a href="#synchronized-script" className="font-medium text-brand underline">
               在本页边听边看同步脚本
             </a>
